@@ -1,7 +1,12 @@
 from datetime import datetime
 def add_time_features(weather):
-    last_updated=weather.get('last_updated')
-    dt=datetime.strptime(last_updated,'%Y-%m-%d %H:%M')
+    timestamp=weather.get('last_updated') or weather.get('time')
+    if not timestamp:
+        raise ValueError('Timestamp Not Found')
+    if " " in timestamp:
+        dt=datetime.strptime(timestamp,'%Y-%m-%d %H:%M')
+    else:
+        dt=datetime.strptime(timestamp, "%Y-%m-%dT%H:%M")
     weather['year']=dt.year
     weather['month']=dt.month
     weather['day']=dt.day
