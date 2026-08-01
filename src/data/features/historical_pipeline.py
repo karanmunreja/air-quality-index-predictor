@@ -1,14 +1,10 @@
 from src.data.features.feature_engineering import add_time_features
-def build_historical_feat(raw_data):
-    hourly=raw_data.get("hourly")
-    if not hourly:
-        raise ValueError("Hourly data not found.")
+def build_historical_feat(city,merged_data):
     features=[]
-    num_records=len(hourly['time'])
-    for i in range(num_records):
-        feature={}
-        for key,values in hourly.items():
-            feature[key]=values[i]
+    for record in merged_data:
+        feature=record.copy()
+        feature["city"] = city
+        feature["aqi"] = feature.pop("us_aqi")
         feature=add_time_features(feature)
         features.append(feature)
     return features
