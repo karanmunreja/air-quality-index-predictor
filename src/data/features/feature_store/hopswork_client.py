@@ -24,8 +24,8 @@ def get_feature_store():
 def get_feature_group():
     fs=get_feature_store()
     featureGroup=fs.get_or_create_feature_group(
-    name="historical_weather_features",
-    version=5,
+    name="aqi_training_features",
+    version=1,
     primary_key=["city","time"],
     description="Historical weather and air quality features for AQI prediction",
     online_enabled=True,

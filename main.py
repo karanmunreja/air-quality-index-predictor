@@ -1,22 +1,24 @@
-from src.data.storage import save_weather_data, save_historical_data
-from src.data.weather_client import get_weather
-from src.data.features.pipeline import build_features 
-from src.data.weather_history_client import get_historical_weather
-from src.data.features.historical_pipeline import build_historical_feat
-from src.data.features.feature_store.hopswork_client import insert_features
-from src.data.air_quality_history_client import get_aqi_data
-from src.data.data_merger import merge_data
-import pandas as pd
+from src.data.features.feature_store.hopswork_client import get_feature_group
+from src.data.pipelines.feature_pipeline import run_feature_pipeline
+from src.data.pipelines.training_pipeline import run_training_pipeline
 
-# weather=get_weather("Ghotki")
-# final_data=build_features(weather)
-# save_weather_data(final_data)
-# print(final_data)
-# print('saved successfully')
-raw_w_data=get_historical_weather('Ghotki','2025-01-01','2025-01-02')
-raw_aqi_data=get_aqi_data('Ghotki','2025-01-01','2025-01-02')
-# merged_data=merge_data(raw_w_data,raw_aqi_data)
-# features=build_historical_feat("Ghotki",merged_data)
-# save_historical_data(features)
-# df=pd.DataFrame(features)
-# insert_features(df.head(1))
+import time
+
+# start = time.time()
+# fg = get_feature_group()
+# print("Get FG:", time.time() - start)
+
+# start = time.time()
+# query = fg.select_all().limit(5)
+# print("Build Query:", time.time() - start)
+
+# start = time.time()
+# df = query.read()
+# print("Read:", time.time() - start)
+
+# df=run_feature_pipeline()
+# run_training_pipeline(df)
+
+# from predictions.predict import predict_all
+# results=predict_all()
+# print(results)

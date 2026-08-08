@@ -1,4 +1,4 @@
-from src.data.weather_history_client import get_cordinates
+from src.data.weather_client import get_cordinates
 import requests
 AIR_QUALITY_VARIABLES = [
     "pm10",
@@ -23,5 +23,10 @@ def get_aqi_data(city,start_date,end_date):
     response=requests.get(AQI_URL,params=params)
     response.raise_for_status()
     data=response.json()
-    print(data["hourly"].keys())
     return data
+
+def get_current_aqi(city):
+    lat,long=get_cordinates(city)
+    params={
+        
+    } 
