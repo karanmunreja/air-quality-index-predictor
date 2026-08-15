@@ -25,6 +25,7 @@ jobs:
 
       - name: Run feature pipeline
         env:
-          HOPSWORKS_API_KEY: ${{secrets.HOPSWORKS_API_KEY }}
+          HOPSWORKS_API_KEY: ${{ secrets.HOPSWORKS_API_KEY }}
+          PYTHONPATH: ${{ github.workspace }}
         run: |
-          python src/data/pipelines/hourly_pipeline.py
+          python -m src.data.pipelines.hourly_pipeline
