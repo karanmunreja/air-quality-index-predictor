@@ -16,7 +16,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
+          python-version: "3.12"
 
       - name: Install dependencies
         run: |
@@ -25,6 +25,6 @@ jobs:
 
       - name: Run feature pipeline
         env:
-          HOPSWORKS_API_KEY: ${{ secrets.HOPSWORKS_API_KEY }}
+          HOPSWORKS_API_KEY: ${{secrets.HOPSWORKS_API_KEY }}
         run: |
           python data/features/pipelines/hourly_pipeline.py
