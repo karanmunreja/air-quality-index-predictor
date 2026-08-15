@@ -1,5 +1,5 @@
 from models.train import train_RandForestReg, train_ridge, train_XgBoost
-from models.evaluate import evaluate
+from models.evaluate import evaluate_multioutput
 from models.lstm import train_lstm
 import pandas as pd
 import os
@@ -7,47 +7,39 @@ import os
 
 RESULTS_FILE = "model_comparison_results.csv"
 
-def train_and_get_best_model(X_train, X_test, y_train, y_test,X_train_seq,X_test_seq, y_train_seq, y_test_seq, forecast_name):
+def train_and_get_best_model(X_train, X_test, y_train, y_test, X_train_seq, X_test_seq, y_train_seq, y_test_seq):
     results=[]
     models={}
     model=train_RandForestReg(X_train,y_train)
-    r2_Score, rmse, mae=evaluate(model,X_test,y_test)
+    metrics=evaluate_multioutput(model,X_test,y_test)
+    metrics["average_r2"] = (metrics["r2_24"] + metrics["r2_48"]+ metrics["r2_72"]) / 3
     results.append({
-    "Horizon": forecast_name,
     'Model':'Random Forest',
-    'r2_Score' : r2_Score,
-    'rmse':rmse,
-    'mae':mae
+    **metrics
 })  
     models['Random Forest']=model
     model=train_ridge(X_train,y_train)
-    r2_Score, rmse, mae=evaluate(model,X_test,y_test)
+    metrics=evaluate_multioutput(model,X_test,y_test)
+    metrics["average_r2"] = (metrics["r2_24"] + metrics["r2_48"]+ metrics["r2_72"]) / 3
     results.append({
-    "Horizon": forecast_name,
     'Model':'Ridge',
-    'r2_Score' : r2_Score,
-    'rmse':rmse,
-    'mae':mae
+    **metrics
 })
     models['Ridge']=model
     model=train_XgBoost(X_train,y_train)
-    r2_Score, rmse, mae=evaluate(model,X_test,y_test)
+    metrics=evaluate_multioutput(model,X_test,y_test)
+    metrics["average_r2"] = (metrics["r2_24"] + metrics["r2_48"]+ metrics["r2_72"]) / 3
     results.append({
-    "Horizon": forecast_name,
     'Model':'XGBoost',
-    'r2_Score' : r2_Score,
-    'rmse':rmse,
-    'mae':mae
+    **metrics
 })
     models['XGBoost']=model
     model = train_lstm(X_train_seq, y_train_seq)
-    r2_Score,rmse,mae = evaluate(model,X_test_seq,y_test_seq)   
+    metrics = evaluate_multioutput(model,X_test_seq,y_test_seq) 
+    metrics["average_r2"] = (metrics["r2_24"] + metrics["r2_48"]+ metrics["r2_72"]) / 3  
     results.append({
-    "Horizon": forecast_name,
     'Model':'LSTM',
-    'r2_Score' : r2_Score,
-    'rmse':rmse,
-    'mae':mae
+    **metrics
 })
     models['LSTM']=model
     results_df=pd.DataFrame(results)
@@ -55,7 +47,7 @@ def train_and_get_best_model(X_train, X_test, y_train, y_test,X_train_seq,X_test
         results_df.to_csv(RESULTS_FILE,mode="a", header=False,index=False)
     else:
         results_df.to_csv(RESULTS_FILE,mode="w",header=True,index=False)
-    best=results_df.loc[results_df['r2_Score'].idxmax()]
+    best=results_df.loc[results_df['average_r2'].idxmax()]
     best_model_name=best['Model']
     best_model=models[best_model_name]
     return best_model_name, best_model, best

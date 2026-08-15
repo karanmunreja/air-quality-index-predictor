@@ -27,6 +27,16 @@ def get_aqi_data(city,start_date,end_date):
 
 def get_current_aqi(city):
     lat,long=get_cordinates(city)
-    params={
-        
-    } 
+    params = {
+        "latitude": lat,
+        "longitude": long,
+        "hourly": ",".join(AIR_QUALITY_VARIABLES),
+        "forecast_hours": 1,
+        "timezone": "auto"
+    }
+    response = requests.get(
+        AQI_URL,
+        params=params
+    )
+    response.raise_for_status()
+    return response.json()

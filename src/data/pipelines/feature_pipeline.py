@@ -8,8 +8,8 @@ import pandas as pd
 from models.preprocessing import engineer_features
 
 def run_feature_pipeline():
-    raw_w_data=get_historical_weather('Lahore','2023-07-01','2026-08-07')
-    raw_aqi_data=get_aqi_data('Lahore','2023-07-01','2026-08-07')
+    raw_w_data=get_historical_weather('Lahore','2026-08-07','2026-08-15')
+    raw_aqi_data=get_aqi_data('Lahore','2026-08-07','2026-08-15')
     merged_data=merge_data(raw_w_data,raw_aqi_data)
     features=build_historical_feat("Lahore",merged_data)
     df=pd.DataFrame(features)

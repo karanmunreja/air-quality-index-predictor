@@ -24,5 +24,7 @@ jobs:
           pip install -r requirements.txt
 
       - name: Run feature pipeline
+        env:
+          HOPSWORKS_API_KEY: ${{ secrets.HOPSWORKS_API_KEY }}
         run: |
           python data/features/pipelines/hourly_pipeline.py

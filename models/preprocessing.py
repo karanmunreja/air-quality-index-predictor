@@ -5,20 +5,46 @@ TARGET_COLS = ['target_aqi_24', 'target_aqi_48', 'target_aqi_72']
 DROP_COLS = [ "time", "minute", "city"]
 
 LAG_COLS = ['aqi']
-LAG_HOURS = [1,6,24,48,72]
+LAG_HOURS = [1, 2, 3, 5, 6, 8, 10, 12, 24, 30, 36, 42, 48, 54, 60, 72]
 def load_training_data():
     feature_group=get_feature_group()
     df=feature_group.read()
     df = df.sort_values(["city", "time"]).reset_index(drop=True)
     return df
 
-def prepare_data(df,horizon_col):
-    df = df.dropna(subset=[horizon_col]).reset_index(drop=True)
-    y = df[horizon_col]
-    X = df.drop(columns=TARGET_COLS + ['minute', 'time', 'city'])
+TARGET_COLS = [
+    "target_aqi_24",
+    "target_aqi_48",
+    "target_aqi_72"
+]
+
+
+def prepare_data(df):
+
+    # Remove rows where any target is missing
+    df = df.dropna(
+        subset=TARGET_COLS
+    ).reset_index(drop=True)
+
+    # All three targets
+    y = df[TARGET_COLS]
+
+    # Features
+    X = df.drop(
+        columns=TARGET_COLS + [
+            "minute",
+            "time",
+            "city"
+        ],
+        errors="ignore"
+    )
+
+    # Remove rows where features are missing
     valid_mask = X.notna().all(axis=1)
+
     X = X[valid_mask].reset_index(drop=True)
     y = y[valid_mask].reset_index(drop=True)
+
     return X, y
 
 def preprocess(df):
@@ -67,9 +93,22 @@ def engineer_features(df):
     df = create_change_rate(df)
     return df
 
-def prepare_prediction_data(latest,history):
-    df=pd.concat([history,latest],ignore_index=True)
-    df=engineer_features(df)
-    latest=df.tail(1)
-    X=df.drop(columns=DROP_COLS+TARGET_COLS, errors="ignore")
+def prepare_prediction_data(latest, history):
+
+    df = pd.concat(
+        [history, latest],
+        ignore_index=True
+    )
+
+    df = engineer_features(df)
+
+    # Get only the latest engineered row
+    latest = df.tail(1)
+
+    # Remove columns that are not model features
+    X = latest.drop(
+        columns=DROP_COLS + TARGET_COLS,
+        errors="ignore"
+    )
+
     return X

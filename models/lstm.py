@@ -4,7 +4,7 @@ from tensorflow.keras.optimizers import Adam
 from tensorflow.keras.callbacks import EarlyStopping
 from sklearn.preprocessing import StandardScaler
 import numpy as np
-
+SEQUENCE_LENGTH = 24
 early_stop = EarlyStopping(
     monitor="val_loss",
     patience=10,
@@ -13,16 +13,21 @@ early_stop = EarlyStopping(
     verbose=1
 )
 
+def create_sequences(X, y):
+    X_seq = []
+    y_seq = []
 
-def create_sequences(X,y, sequence_length=24):
-    X = np.asarray(X)
-    y = np.asarray(y)
-    X_seq=[]
-    y_seq=[]
-    for i in range(len(X) - sequence_length):
-        X_seq.append(X[i:i + sequence_length])
-        y_seq.append(y[i + sequence_length])
+    for i in range(len(X) - SEQUENCE_LENGTH):
+        X_seq.append(
+            X[i:i + SEQUENCE_LENGTH]
+        )
+
+        y_seq.append(
+            y.iloc[i + SEQUENCE_LENGTH]
+        )
+
     return np.array(X_seq), np.array(y_seq)
+
 
 def train_lstm(X_train, y_train):
 
@@ -31,16 +36,30 @@ def train_lstm(X_train, y_train):
     model.add(
         LSTM(
             units=64,
-            input_shape=(X_train.shape[1], X_train.shape[2])
+            input_shape=(
+                X_train.shape[1],
+                X_train.shape[2]
+            )
         )
     )
 
-    model.add(Dense(32, activation="relu"))
+    model.add(
+        Dense(
+            32,
+            activation="relu"
+        )
+    )
 
-    model.add(Dense(1))
+    # 3 outputs:
+    # 24h, 48h, 72h
+    model.add(
+        Dense(3)
+    )
 
     model.compile(
-        optimizer=Adam(learning_rate=0.001),
+        optimizer=Adam(
+            learning_rate=0.001
+        ),
         loss="mse",
         metrics=["mae"]
     )
@@ -54,6 +73,7 @@ def train_lstm(X_train, y_train):
         callbacks=[early_stop],
         verbose=1
     )
+
     return model
 
 def preprocess_lstm_feat(X_train,X_test,y_train,y_test):

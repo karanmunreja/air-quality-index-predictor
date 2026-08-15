@@ -1,3 +1,4 @@
+from src.data.air_quality_client import get_current_aqi
 from src.data.features.feature_store.hopswork_client import get_feature_group
 from src.data.pipelines.feature_pipeline import run_feature_pipeline
 from src.data.pipelines.training_pipeline import run_training_pipeline
@@ -19,6 +20,68 @@ import time
 # df=run_feature_pipeline()
 # run_training_pipeline(df)
 
+# data = get_current_aqi("Lahore")
+# print(data)
 # from predictions.predict import predict_all
 # results=predict_all()
 # print(results)
+
+# from src.data.features.feature_view import get_feature_view
+
+
+# fv = get_feature_view()
+
+# print("Feature View created/found successfully")
+
+# print("Name:", fv.name)
+# print("Version:", fv.version)
+
+# from datetime import datetime
+
+# from src.data.features.feature_view import get_feature_view
+
+
+# fv = get_feature_view()
+
+# print("Feature View:", fv.name)
+# print("Version:", fv.version)
+
+
+# entry = {
+#     "city": "Lahore",
+#     "time":"2023-07-04T14:00"
+    
+# }
+
+# features = fv.get_feature_vector(
+#     entry=entry
+# )
+
+# print("\nFeature vector:")
+# print(features)
+
+ 
+# print("Feature names:")
+# for feature in fv.features:
+#     print(feature.name)
+
+# from src.data.features.prediction_features import get_feature_vector
+
+# X = get_feature_vector(
+#     city="Lahore",
+#     time="2023-07-04T14:00"
+# )
+
+# print(X.shape)
+# print(X.columns.tolist())
+# print(X)
+
+from src.data.features.feature_store.hopswork_client import (
+    get_latest_feature_view
+)
+
+fv = get_latest_feature_view()
+
+print("Feature View created:")
+print(fv.name)
+print("Version:", fv.version)
