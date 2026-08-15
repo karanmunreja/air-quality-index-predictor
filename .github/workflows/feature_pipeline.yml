@@ -27,4 +27,4 @@ jobs:
         env:
           HOPSWORKS_API_KEY: ${{secrets.HOPSWORKS_API_KEY }}
         run: |
-          python data/features/pipelines/hourly_pipeline.py
+          python src/data/pipelines/hourly_pipeline.py
