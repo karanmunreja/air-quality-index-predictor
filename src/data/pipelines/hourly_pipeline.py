@@ -208,7 +208,8 @@ def run_hourly_pipeline():
     # ==================================================
     # 10. Insert ONLY new row into historical FG
     # ==================================================
-
+    latest_row["time"] = latest_row["time"].dt.strftime("%Y-%m-%dT%H:%M")
+    latest_row["weekday"] = latest_row["weekday"].astype("int64")
     insert_features(
         latest_row
     )
