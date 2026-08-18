@@ -23,8 +23,9 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Run training pipeline
+      - name: Run daily training pipeline
+        env:
+           HOPSWORKS_API_KEY: ${{ secrets.HOPSWORKS_API_KEY }}
+           PYTHONPATH: ${{ github.workspace }}
         run: |
-          python data/features/pipelines/daily_training_pipeline.py
-
-
+          python -m src.data.pipelines.daily_training_pipeline
