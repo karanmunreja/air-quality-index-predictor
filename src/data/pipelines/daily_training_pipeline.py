@@ -6,7 +6,6 @@ from models.training_pipeline import train_and_get_best_model
 import os
 import joblib
 
-
 def run_daily_training_pipeline():
     df = load_training_data()
     df = create_target(df)
@@ -30,7 +29,8 @@ def run_daily_training_pipeline():
     register_model(
         model_name=f"aqi_forecast_{best_model_name.lower().replace(' ', '_')}",
         model_path=filename,
-        r2_Score=best["average_r2"],
-        rmse=(best["rmse_24"] + best["rmse_48"] + best["rmse_72"]) / 3,
-        mae=(best["mae_24"] + best["mae_48"] + best["mae_72"]) / 3
+        r2_24=best["r2_24"], rmse_24=best["rmse_24"], mae_24=best["mae_24"],
+        r2_48=best["r2_48"], rmse_48=best["rmse_48"], mae_48=best["mae_48"],
+        r2_72=best["r2_72"], rmse_72=best["rmse_72"], mae_72=best["mae_72"],
+        average_r2=best["average_r2"]
     )
