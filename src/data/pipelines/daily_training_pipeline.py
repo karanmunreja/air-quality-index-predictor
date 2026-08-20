@@ -6,6 +6,7 @@ from models.training_pipeline import train_and_get_best_model
 import os
 import joblib
 
+
 def run_daily_training_pipeline():
     df = load_training_data()
     df = create_target(df)
@@ -34,5 +35,7 @@ def run_daily_training_pipeline():
         r2_72=best["r2_72"], rmse_72=best["rmse_72"], mae_72=best["mae_72"],
         average_r2=best["average_r2"]
     )
-    if __name__ == "__main__":
-        run_daily_training_pipeline()
+
+
+if __name__ == "__main__":
+    run_daily_training_pipeline()
