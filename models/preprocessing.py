@@ -6,27 +6,9 @@ DROP_COLS = [ "time", "minute", "city"]
 
 LAG_COLS = ['aqi']
 LAG_HOURS = [1, 2, 3, 5, 6, 8, 10, 12, 24, 30, 36, 42, 48, 54, 60, 72]
-import time
-from hopsworks_common.client.exceptions import FeatureStoreException
-
-
-def load_training_data(max_tries=3, wait_seconds=20):
-    feature_group = get_feature_group()
-
-    df = None
-    for attempt in range(1, max_tries + 1):
-        try:
-            # first attempt: fast Arrow Flight path
-            # later attempts: fall back to slower but more stable Hive path
-            read_opts = {} if attempt == 1 else {"use_hive": True}
-            df = feature_group.read(read_options=read_opts)
-            break
-        except FeatureStoreException as e:
-            print(f"[retry] read attempt {attempt}/{max_tries} failed: {e}")
-            if attempt == max_tries:
-                raise
-            time.sleep(wait_seconds * attempt)  # 20s, 40s...
-
+def load_training_data():
+    feature_group=get_feature_group()
+    df=feature_group.read()
     df = df.sort_values(["city", "time"]).reset_index(drop=True)
     return df
 
