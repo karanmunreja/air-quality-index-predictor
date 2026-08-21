@@ -57,40 +57,36 @@ def insert_features(df):
     feature_group = get_feature_group()
     _insert_with_retry(feature_group, df, write_options={"wait_for_job": True})
 
-
 def get_latest_feature_group():
     fs = get_feature_store()
 
     feature_group = fs.get_or_create_feature_group(
         name="latest_aqi_features",
-        version=1,
+        version=2,                      # ✅ match get_latest_feature_view()
         primary_key=["city"],
         description="Latest processed AQI features for online prediction",
         online_enabled=True,
         time_travel_format="HUDI"
     )
-
     return feature_group
-
 
 def insert_latest_features(df):
     feature_group = get_latest_feature_group()
     _insert_with_retry(feature_group, df, write_options={"wait_for_job": True})
-
 
 def get_latest_feature_view():
     fs = get_feature_store()
 
     latest_fg = fs.get_feature_group(
         name="latest_aqi_features",
-        version=1
+        version=2                       # point at the new FG version
     )
 
     query = latest_fg.select_all()
 
     fv = fs.get_or_create_feature_view(
         name="aqi_latest_fv",
-        version=1,
+        version=2,                      # new FV version too
         query=query,
         description="Latest AQI features for online prediction"
     )
