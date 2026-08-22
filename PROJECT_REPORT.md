@@ -16,7 +16,30 @@ The delivered application has three main user-facing capabilities:
 2. EDA using the historical Hopsworks feature group: data-quality summary, AQI trend, pollutant overlays, correlation matrix, and feature-versus-AQI exploration.
 3. SHAP-based local model explanations for each forecast horizon, using the same latest online feature row used for live prediction.
 
-## 2. Business problem and objective
+## 2. Experimentation 
+
+The repository now contains an explicit, linear experiment script in `main.py` that
+is written to reflect the step-by-step learning process used during the
+internship. Unlike previous guarded versions, this script intentionally raises
+errors if environment pieces are missing so reviewers can see the exact calls
+made during exploration. The script performs the following:
+
+- Loads `model_comparison_results.csv` if present; otherwise fetches a small
+       sample of hourly AQI/PM data from Open-Meteo and saves it as `sample_aqi.csv`.
+- Performs basic EDA: head, dtypes, missing-value counts, numeric summary,
+       and correlations vs. AQI.
+- Constructs simple time features (`hour`, `weekday`) and lag features
+       (`aqi_lag1`, `aqi_lag24`) and fills small gaps deterministically.
+- Shows how to call the project's Hopsworks feature-store client explicitly
+       via `src.data.features.feature_store.hopswork_client.get_latest_feature_view()`
+       (the call is present in the script and will error if Hopsworks is not set up).
+- Trains two baseline models (Ridge and RandomForest), prints RMSE/MAE/R²,
+       and saves a demo Ridge model and scaler under `saved_models/`.
+
+This change documents the exploratory workflow and provides a reproducible
+starter flow for reviewers who want to run the experiments locally.
+
+## 3. Business problem and objective
 
 Lahore can experience substantial variation in pollution levels. A short-horizon AQI forecast can support safer choices about outdoor exercise, commuting, school activities, and health precautions.
 
@@ -29,7 +52,7 @@ The project objective is to build a reproducible system that:
 - provides a non-technical dashboard with actionable health context; and
 - explains which features caused an individual forecast to increase or decrease.
 
-## 3. Solution architecture
+## 4. Solution architecture
 
 ```text
 Open-Meteo Weather API ─┐
@@ -53,9 +76,9 @@ Two Hopsworks data paths are intentionally used:
 
 This separation prevents the dashboard from using a one-row serving table as its historical analysis dataset.
 
-## 4. Data acquisition and preparation
+## 5. Data acquisition and preparation
 
-### 4.1 Data sources
+### 5.1 Data sources
 
 The project uses Open-Meteo services:
 
@@ -64,7 +87,7 @@ The project uses Open-Meteo services:
 - **Archive weather API:** retrieves historical weather for the batch feature pipeline.
 - **Air Quality API:** retrieves PM10, PM2.5, carbon monoxide, nitrogen dioxide, sulphur dioxide, ozone, and US AQI.
 
-### 4.2 Feature construction
+### 5.2 Feature construction
 
 The raw hourly weather and AQI payloads are merged by time position. The resulting record is converted to a project feature record with city and AQI fields. Time components are then derived:
 
@@ -75,19 +98,19 @@ The raw hourly weather and AQI payloads are merged by time position. The resulti
 
 The supervised targets are produced by shifting AQI forward by 24, 48, and 72 rows: `target_aqi_24`, `target_aqi_48`, and `target_aqi_72`.
 
-### 4.3 Handling history for online features
+### 5.3 Handling history for online features
 
 The hourly pipeline reads the last **76 hours** of historical data. This provides enough context for the largest 72-hour lag plus the current observation. It combines the new record with history, prevents duplicate timestamps, re-engineers the features, validates that the latest row is complete, and writes that row to both Hopsworks groups.
 
-## 5. Modelling approach
+## 6. Modelling approach
 
-### 5.1 Train/test design
+### 6.1 Train/test design
 
 Records are sorted by time and split chronologically: the first 80% are training data and the final 20% are test data. This is more appropriate than random splitting for a forecasting task because it avoids training on future observations.
 
 For tabular models, non-model identifiers and targets are removed. For the LSTM, features are standardized and transformed into rolling 24-hour sequences.
 
-### 5.2 Candidate models
+### 6.2 Candidate models
 
 | Model | Implementation | Key settings | Notes |
 |---|---|---|---|
@@ -98,11 +121,11 @@ For tabular models, non-model identifiers and targets are removed. For the LSTM,
 
 The evaluation routine reports R², RMSE, and MAE independently for each horizon, then uses the mean of the three R² values as `average_r2` for model selection.
 
-## 6. Model-comparison results
+## 7. Model-comparison results
 
 `model_comparison_results.csv` contains four logged runs for Random Forest, Ridge, and XGBoost, plus two LSTM entries. One LSTM entry has a blank `average_r2`; it is excluded from average-R² aggregation below.
 
-### 6.1 Mean results across logged experiments
+### 7.1 Mean results across logged experiments
 
 | Model | 24h R² | 24h RMSE | 24h MAE | 48h R² | 48h RMSE | 48h MAE | 72h R² | 72h RMSE | 72h MAE | Mean average R² |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
@@ -113,7 +136,7 @@ The evaluation routine reports R², RMSE, and MAE independently for each horizon
 
 *LSTM average metrics use the one complete average-R² record where applicable; per-horizon figures reflect the available logged LSTM values.
 
-### 6.2 Interpretation
+### 7.2 Interpretation
 
 - **Best overall: Ridge.** It has the highest mean average R² (about 0.630) and the best 48-hour and 72-hour R², RMSE, and MAE results. This makes it the best current choice when all three horizons matter.
 - **Best next-day model: XGBoost.** Its 24-hour R² is about 0.773 with the lowest 24-hour RMSE and MAE, so it is attractive when the product focuses primarily on the next-day forecast.
@@ -123,7 +146,7 @@ The evaluation routine reports R², RMSE, and MAE independently for each horizon
 
 The best individual complete logged result is **Ridge**, with `average_r2 = 0.6302634341`.
 
-## 7. Training, registration, and deployment
+## 8. Training, registration, and deployment
 
 After comparison, the selected model is serialized to `saved_models/aqi_forecast_multi.pkl`. Its metrics and algorithm name are registered in Hopsworks under the `aqi_forecast_multi` model name.
 
@@ -131,7 +154,7 @@ The deployment script asks Hopsworks for the model with the greatest `Average_R2
 
 The daily training pipeline performs the full orchestration: load feature-group data, build targets, train all models, select the best, save/register it, and deploy it.
 
-## 8. API layer
+## 9. API layer
 
 `app.py` is the FastAPI boundary between the dashboard, the feature store, and Hopsworks Model Serving.
 
@@ -145,7 +168,7 @@ The daily training pipeline performs the full orchestration: load feature-group 
 
 For explainability, the API downloads the best registered artifact, confirms its feature schema, obtains a 100-row historical background sample, selects TreeExplainer for tree models and LinearExplainer for Ridge, and normalizes multi-output SHAP values into one feature contribution vector per horizon. Model and background data are cached in memory to reduce repeat latency.
 
-## 9. Streamlit dashboard
+## 10. Streamlit dashboard
 
 The main dashboard is intentionally full-width and does not expose a sidebar. It uses a dark visual system with AQI-severity colours.
 
@@ -176,7 +199,7 @@ Shown below EDA after explanation calculation completes:
 - hover values for the actual feature value and SHAP impact;
 - prediction and base-value summary.
 
-## 10. File-by-file implementation inventory
+## 11. File-by-file implementation inventory
 
 | File | Responsibility |
 |---|---|
@@ -208,7 +231,7 @@ Shown below EDA after explanation calculation completes:
 | `src/data/pipelines/hourly_pipeline.py` | Hourly online ingestion and latest-feature-group update. |
 | `src/data/pipelines/daily_training_pipeline.py` | Scheduled-style end-to-end retraining, registry, and deployment pipeline. |
 
-## 11. How to operate the system
+## 12. How to operate the system
 
 ### Prerequisites
 
@@ -237,7 +260,7 @@ streamlit run streamlit_app.py
 
 If Streamlit reports that it cannot connect to `localhost:8000`, FastAPI is not running, has stopped with an error, or is using another port.
 
-## 12. Current limitations and recommendations
+## 13. Current limitations and recommendations
 
 1. **Feature-pipeline dates are hard-coded.** `feature_pipeline.py` currently uses a fixed August 2026 range. Convert dates to function parameters or scheduled rolling windows.
 2. **Validation can be stronger.** The current 80/20 chronological split is sensible, but walk-forward or expanding-window cross-validation would give more robust performance estimates.
@@ -249,6 +272,7 @@ If Streamlit reports that it cannot connect to `localhost:8000`, FastAPI is not 
 8. **Monitoring.** Add prediction latency, feature freshness, API error, missing-data, and post-deployment forecast-error monitoring.
 9. **Documentation.** Keep the README current as the deployed endpoint, model, and workflow mature.
 
-## 13. Conclusion
+## 14. Conclusion
 
 Karan’s AQI Predictor for Lahore demonstrates a complete data-science lifecycle: acquisition, feature engineering, multi-horizon forecasting, model comparison, experiment logging, feature-store integration, model registry/deployment, interactive EDA, explainability, and a practical dashboard. The logged results support Ridge as the current best balanced model, while XGBoost remains the strongest next-day specialist. The main next step is operational hardening: scheduled ingestion and retraining, stronger time-series validation, clean experiment metadata, and a dedicated sequence-serving path if the LSTM is to be deployed.
+
