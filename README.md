@@ -23,13 +23,22 @@ Streamlit <- FastAPI <- latest feature view + Hopsworks model serving
 
 ## Setup
 
-Create and activate a virtual environment, then install dependencies. If your pip mirror cannot find SHAP, force the PyPI index as shown below.
+Create and activate the backend/training environment. If your pip mirror cannot find SHAP, force the PyPI index as shown below.
 
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
 python3 -m pip install --upgrade pip
 python3 -m pip install --index-url https://pypi.org/simple -r requirements.txt
+```
+
+For a separate lightweight Streamlit environment:
+
+```bash
+python3 -m venv .venv-streamlit
+source .venv-streamlit/bin/activate
+python3 -m pip install --upgrade pip
+python3 -m pip install --index-url https://pypi.org/simple -r requirements-streamlit.txt
 ```
 
 Copy the configuration template and add your real Hopsworks key:
@@ -65,8 +74,6 @@ python3 -m src.data.pipelines.hourly_pipeline
 # Train candidates, register the best one, and deploy it
 python3 -m src.data.pipelines.daily_training_pipeline
 
-# Run automated checks
-python3 -m pytest -q
 ```
 
 ## API endpoints
@@ -85,8 +92,7 @@ python3 -m pytest -q
 - `models/`: preprocessing, candidate model training, evaluation, and registry integration.
 - `app.py`: FastAPI application.
 - `streamlit_app.py`: user dashboard.
-- `.github/workflows/`: hourly ingestion, daily retraining, and test automation.
-- `tests/`: unit and API-health tests.
+- `.github/workflows/`: hourly ingestion and daily retraining automation.
 
 ## GitHub Actions secrets
 

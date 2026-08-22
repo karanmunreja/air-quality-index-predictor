@@ -1,0 +1,4 @@
+# Lightweight dashboard environment. These versions match the active .venv.
+streamlit==1.62.0
+plotly==6.9.0
+Pillow==12.3.0

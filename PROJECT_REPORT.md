@@ -182,7 +182,8 @@ Shown below EDA after explanation calculation completes:
 |---|---|
 | `README.md` | Minimal project introduction. It should be expanded with setup and architecture instructions. |
 | `main.py` | Development scratchpad for testing feature-store and feature-view operations. |
-| `requirements.txt` | Pinned runtime packages: data science, TensorFlow, Hopsworks, FastAPI/Uvicorn, Streamlit, Plotly, SHAP, and Pillow. |
+| `requirements.txt` | Pinned backend, data-pipeline, model-training, and SHAP packages. |
+| `requirements-streamlit.txt` | Lightweight Streamlit/Plotly/Pillow dashboard environment. |
 | `icon.png` | Browser/page icon used by Streamlit. |
 | `app.py` | FastAPI service for live prediction, history retrieval, and SHAP explanation. |
 | `streamlit_app.py` | Main dashboard: forecast visualisation, alerts, EDA, and SHAP presentation. |
