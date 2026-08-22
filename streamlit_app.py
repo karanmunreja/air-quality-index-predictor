@@ -623,11 +623,26 @@ def fetch_prediction(base_url: str):
     return {"h24": float(row[0]), "h48": float(row[1]), "h72": float(row[2])}
 
 
+def fetch_model_info(base_url: str):
+    """Fetch deployed model metadata from the backend `/model` endpoint."""
+    try:
+        resp = requests.get(f"{base_url.rstrip('/')}/model", timeout=10)
+        resp.raise_for_status()
+        return resp.json()
+    except Exception:
+        return None
+
+
 def load_forecast():
     try:
         st.session_state["prediction"] = fetch_prediction(api_base_url)
         st.session_state["prediction_time"] = datetime.now()
         st.session_state["prediction_error"] = None
+        # Fetch deployed model metadata for display (non-blocking fallback)
+        try:
+            st.session_state["model_info"] = fetch_model_info(api_base_url)
+        except Exception:
+            st.session_state["model_info"] = None
     except Exception as exc:
         st.session_state["prediction_error"] = str(exc)
 
@@ -718,6 +733,10 @@ with tab_forecast:
         haze_speed = 70 - sev_idx * 10
         ring_pct = max(0, min(value, AQI_SCALE_MAX)) / AQI_SCALE_MAX * 100
         ring_glow = hex_to_rgba(color, 0.55)
+        # Display the deployed model name (prefer registered name, fall back to configured name)
+        model_info = st.session_state.get("model_info") or {}
+        model_display = model_info.get("registered_name") or model_info.get("model_name") or "aqi_forecast_multi"
+
         st.markdown(f'''<div class="aqi-hero" style="background:linear-gradient(135deg,{color}45,{BG} 72%);--haze-opacity:{haze_opacity};--haze-speed:{haze_speed}s;">
             <div class="aqi-hero-flex">
                 <div class="aqi-ring" style="--ring-color:{color};--ring-pct:{ring_pct:.1f};--ring-glow:{ring_glow};">
@@ -731,7 +750,7 @@ with tab_forecast:
                 <div class="aqi-hero-text">
                     <div class="aqi-hero-city">Lahore · Next 24h Outlook</div>
                     <div class="aqi-hero-label" style="color:{color};">{label}</div>
-                    <div class="aqi-hero-sub">Forecast generated {pred_time.strftime('%H:%M:%S')} · model: aqi_forecast_multi</div>
+                    <div class="aqi-hero-sub">Forecast generated {pred_time.strftime('%H:%M:%S')} · model: {model_display}</div>
                     <div class="aqi-hero-advice">{advice}</div>
                 </div>
                 {f'<img class="aqi-guardian" src="{STICKER_URI}" alt="AQI air-quality guardian sticker">' if STICKER_URI else ''}

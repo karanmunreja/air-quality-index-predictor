@@ -166,6 +166,27 @@ def predict():
         raise HTTPException(status_code=500, detail=str(exc)) from exc
 
 
+@app.get("/model")
+def model_info():
+    """Return metadata about the best deployed/selected model.
+
+    This mirrors the logic used by `load_explanation_model()` and
+    `deploy_model()` to pick the best-registered model by the
+    `Average_R2` metric.
+    """
+    try:
+        registry = connect().get_model_registry()
+        model_meta = registry.get_best_model(MODEL_NAME, "Average_R2", "max")
+        return {
+            "model_name": MODEL_NAME,
+            "registered_name": getattr(model_meta, "name", None),
+            "version": getattr(model_meta, "version", None),
+            "metrics": getattr(model_meta, "training_metrics", {}),
+        }
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Could not retrieve model info: {exc}") from exc
+
+
 @app.get("/history")
 def history(days: int = Query(default=30, ge=7, le=365)):
     """Historical, engineered data used by EDA; target columns are present when available."""
