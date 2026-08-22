@@ -733,9 +733,12 @@ with tab_forecast:
         haze_speed = 70 - sev_idx * 10
         ring_pct = max(0, min(value, AQI_SCALE_MAX)) / AQI_SCALE_MAX * 100
         ring_glow = hex_to_rgba(color, 0.55)
-        # Display the deployed model name (prefer registered name, fall back to configured name)
+        # Display the registered model description when available, otherwise fall back to the algorithm or configured name
         model_info = st.session_state.get("model_info") or {}
-        model_display = model_info.get("registered_name") or model_info.get("model_name") or "aqi_forecast_multi"
+        model_display = (
+            model_info.get("description")
+            or model_info.get("model_name")
+        )
 
         st.markdown(f'''<div class="aqi-hero" style="background:linear-gradient(135deg,{color}45,{BG} 72%);--haze-opacity:{haze_opacity};--haze-speed:{haze_speed}s;">
             <div class="aqi-hero-flex">
@@ -870,7 +873,7 @@ with tab_eda:
                         st.session_state.pop("history_error", None)
                     except Exception as exc:
                         st.session_state["history_error"] = str(exc)
-                st.experimental_rerun()
+                st.rerun()
         else:
             st.info("Historical data is loading...")
     else:
@@ -979,7 +982,7 @@ with tab_shap:
                         st.session_state.pop("explain_error", None)
                     except Exception as exc:
                         st.session_state["explain_error"] = str(exc)
-                st.experimental_rerun()
+                st.rerun()
         else:
             st.info("Model explanation is loading...")
 
