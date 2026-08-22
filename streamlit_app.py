@@ -12,15 +12,17 @@ import streamlit as st
 import requests
 import plotly.graph_objects as go
 import pandas as pd
+import os
+import base64
+from pathlib import Path
 from datetime import datetime
-from src.config import API_BASE_URL
 
 # ==========================================================
 # PAGE CONFIG
 # ==========================================================
 from PIL import Image
 try:
-    _page_icon = Image.open("icon.png")
+    _page_icon = Image.open("assets/icon.png")
 except Exception:
     _page_icon = "🌫️"
 
@@ -143,6 +145,18 @@ def render_spectrum(current_value: float | None = None) -> str:
     <div class="aqi-spectrum-labels"><span>0</span>{labels}<span>500</span></div></div>'''
 
 
+def asset_data_uri(path: str) -> str:
+    """Embed a small local illustration so Streamlit serves it reliably."""
+    try:
+        encoded = base64.b64encode(Path(path).read_bytes()).decode("ascii")
+        return f"data:image/png;base64,{encoded}"
+    except OSError:
+        return ""
+
+
+STICKER_URI = asset_data_uri("assets/aqi-guardian-sticker.png")
+
+
 # ==========================================================
 # GLOBAL CSS
 # ==========================================================
@@ -154,6 +168,7 @@ st.markdown(f"""
 <style>
     html, body, [class*="css"] {{
         font-family: 'Inter', sans-serif;
+        font-size: 17px;
     }}
 
     .stApp {{
@@ -164,8 +179,13 @@ st.markdown(f"""
         color: {INK};
     }}
 
-    .stApp p, .stApp label, .stCaption, [data-testid="stCaptionContainer"] {{
-        color: {INK_MUTED} !important;
+    .stApp p, .stApp label {{
+        color: {INK} !important;
+    }}
+
+    .stCaption, [data-testid="stCaptionContainer"] {{
+        color: #B9C6D9 !important;
+        font-size: 0.95rem !important;
     }}
 
     .stApp h1, .stApp h2, .stApp h3, .stApp h4,
@@ -179,6 +199,8 @@ st.markdown(f"""
         border-radius: 12px;
         padding: 0.85rem 1rem;
     }}
+    [data-testid="stMetricLabel"] p {{ font-size: 1rem !important; font-weight: 600; }}
+    [data-testid="stMetricValue"] {{ font-size: 2.35rem !important; font-weight: 700 !important; }}
 
     .stTabs [data-baseweb="tab-list"] {{
         gap: 0.45rem;
@@ -268,6 +290,53 @@ st.markdown(f"""
         border-bottom: 1px solid {HAIRLINE};
         margin-bottom: 1.6rem;
     }}
+    .aqi-app-header {{
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 1rem;
+        padding: 0.85rem 0 1.1rem;
+        border-bottom: 1px solid {HAIRLINE};
+        margin-bottom: 0.55rem;
+    }}
+    .aqi-brand {{
+        font-family: 'Space Grotesk', sans-serif;
+        font-size: 1.35rem;
+        font-weight: 700;
+        letter-spacing: -0.04em;
+        color: {INK};
+    }}
+    .aqi-brand span {{ color: #35D97A; }}
+    .aqi-brand .aqi-brand-sub {{
+        display: block;
+        margin-top: 0.08rem;
+        font-family: 'IBM Plex Mono', monospace;
+        font-size: 0.63rem;
+        color: {INK_MUTED};
+        letter-spacing: 0.09em;
+        text-transform: uppercase;
+    }}
+    .aqi-location {{
+        display: inline-flex;
+        align-items: center;
+        gap: 0.45rem;
+        padding: 0.46rem 0.7rem;
+        border: 1px solid {HAIRLINE};
+        border-radius: 999px;
+        color: {INK};
+        background: rgba(27,36,51,0.72);
+        font-family: 'IBM Plex Mono', monospace;
+        font-size: 0.74rem;
+    }}
+    .aqi-location-pin {{ color: #FF4D5E; font-size: 0.9rem; }}
+    .aqi-location-pin {{
+        display: inline-flex;
+        width: 18px;
+        height: 18px;
+        color: #FF6473;
+        filter: drop-shadow(0 0 5px rgba(255,77,94,0.35));
+    }}
+    .aqi-location-pin svg {{ width: 18px; height: 18px; fill: currentColor; }}
     .aqi-topbar-left {{
         font-family: 'IBM Plex Mono', monospace;
         font-size: 0.78rem;
@@ -328,21 +397,10 @@ st.markdown(f"""
         position: relative;
         z-index: 1;
     }}
-    .aqi-hero-number {{
-        font-family: 'Fraunces', serif;
-        font-optical-sizing: auto;
-        font-weight: 600;
-        font-size: 6.2rem;
-        line-height: 1;
-        color: #ffffff;
-        position: relative;
-        z-index: 1;
-    }}
     .aqi-hero-label {{
         font-family: 'Space Grotesk', sans-serif;
         font-weight: 600;
         font-size: 1.35rem;
-        color: #ffffff;
         margin-top: 0.2rem;
         position: relative;
         z-index: 1;
@@ -363,6 +421,81 @@ st.markdown(f"""
         line-height: 1.5;
         position: relative;
         z-index: 1;
+    }}
+
+    /* ---- Ring gauge (Google-style) ---- */
+    .aqi-hero-flex {{
+        display: flex;
+        align-items: center;
+        gap: 2.4rem;
+        flex-wrap: wrap;
+        position: relative;
+        z-index: 1;
+    }}
+    .aqi-hero-text {{
+        flex: 1;
+        min-width: 260px;
+    }}
+    .aqi-guardian {{
+        width: min(172px, 24vw);
+        height: auto;
+        object-fit: contain;
+        flex-shrink: 0;
+        filter: drop-shadow(0 16px 22px rgba(0,0,0,0.28));
+        animation: guardian-float 4.5s ease-in-out infinite;
+    }}
+    @keyframes guardian-float {{
+        0%, 100% {{ transform: translateY(0); }}
+        50% {{ transform: translateY(-7px); }}
+    }}
+    @media (max-width: 680px) {{
+        .aqi-app-header {{ align-items: flex-start; flex-direction: column; }}
+        .aqi-guardian {{ width: 122px; }}
+    }}
+    .aqi-ring {{
+        position: relative;
+        width: 196px;
+        height: 196px;
+        flex-shrink: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }}
+    .aqi-ring-track {{
+        position: absolute;
+        inset: 0;
+        border-radius: 50%;
+        background: conic-gradient(var(--ring-color) calc(var(--ring-pct) * 1%), rgba(255,255,255,0.10) 0);
+        filter: drop-shadow(0 0 20px var(--ring-glow));
+        transition: background 0.4s ease;
+    }}
+    .aqi-ring-hole {{
+        position: absolute;
+        inset: 16px;
+        border-radius: 50%;
+        background: {BG};
+        box-shadow: inset 0 0 0 1px rgba(255,255,255,0.07);
+    }}
+    .aqi-ring-center {{
+        position: relative;
+        z-index: 2;
+        text-align: center;
+    }}
+    .aqi-ring-number {{
+        font-family: 'Fraunces', serif;
+        font-optical-sizing: auto;
+        font-weight: 600;
+        font-size: 3.4rem;
+        line-height: 1;
+        color: #ffffff;
+    }}
+    .aqi-ring-scale {{
+        font-family: 'IBM Plex Mono', monospace;
+        font-size: 0.62rem;
+        letter-spacing: 0.09em;
+        text-transform: uppercase;
+        color: rgba(255,255,255,0.55);
+        margin-top: 0.3rem;
     }}
 
     /* ---- Forecast cards ---- */
@@ -405,13 +538,18 @@ st.markdown(f"""
     /* ---- Section headings ---- */
     .aqi-section-label {{
         font-family: 'IBM Plex Mono', monospace;
-        font-size: 0.75rem;
+        font-size: 0.92rem;
         letter-spacing: 0.1em;
         text-transform: uppercase;
-        color: {INK_MUTED};
-        margin: 1.8rem 0 0.8rem 0;
+        color: #D8E2F1;
+        margin: 4rem 0 1.2rem 0;
         border-bottom: 1px solid {HAIRLINE};
-        padding-bottom: 0.5rem;
+        padding: 0 0 0.75rem 0;
+    }}
+    .aqi-section-spacer {{
+        height: 3.5rem;
+        border-bottom: 1px solid rgba(38,49,74,0.55);
+        margin: 3.5rem 0 0;
     }}
 
     /* ---- Advisory panel ---- */
@@ -429,8 +567,8 @@ st.markdown(f"""
         margin-bottom: 0.35rem;
     }}
     .aqi-advisory-text {{
-        color: {INK_MUTED};
-        font-size: 0.92rem;
+        color: #D4DEEB;
+        font-size: 1.05rem;
         line-height: 1.55;
     }}
 
@@ -460,7 +598,7 @@ st.markdown(f"""
 
 
 # DATA FETCH
-api_base_url = API_BASE_URL
+api_base_url = os.getenv("AQI_API_BASE_URL", "http://localhost:8000")
 
 def fetch_prediction(base_url: str):
     """Calls the FastAPI /predict endpoint and normalizes the response
@@ -520,15 +658,27 @@ def refresh_dashboard():
 
 loading_screen = st.empty()
 if "dashboard_loaded" not in st.session_state:
+    # Small animated spinner buffer (rotating SVG) while initial data loads
     loading_screen.markdown(f'''
     <div class="aqi-hero" style="background:linear-gradient(135deg,#16213A,{BG});">
-        <div class="aqi-hero-city">Lahore · Live air-quality intelligence</div>
-        <div class="aqi-hero-label" style="font-size:1.8rem;">Loading AQI forecast</div>
-        <div class="aqi-hero-advice">Fetching the latest sensor features and preparing the forecast. Historical analysis and model explanation continue loading next.</div>
+            <div style="margin-top:1rem;display:flex;align-items:center;gap:12px;">
+            <style>
+                .aqi-spinner {{ width:40px; height:40px; display:inline-block; }}
+                @keyframes aqi-spin {{ from {{ transform: rotate(0deg); }} to {{ transform: rotate(360deg); }} }}
+                .aqi-spinner svg {{ animation: aqi-spin 1s linear infinite; width:40px; height:40px; transform-origin: center; }}
+            </style>
+            <div class="aqi-spinner">
+                <svg viewBox="0 0 50 50" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                    <circle cx="25" cy="25" r="20" fill="none" stroke="{INK_MUTED}" stroke-width="5" stroke-opacity="0.2"/>
+                    <path d="M45 25a20 20 0 0 1-20 20" stroke="{INK}" stroke-width="5" stroke-linecap="round" fill="none"/>
+                </svg>
+            </div>
+            <div style="color:{INK};font-family:'Fraunces',serif;font-size:1.05rem;font-weight:600;">AQI forecastor - Lahore</div>
+        </div>
     </div>
     ''', unsafe_allow_html=True)
-    with st.spinner("Loading AQI forecast..."):
-        load_forecast()
+    # Use the custom SVG spinner above; call loader without Streamlit's spinner overlay
+    load_forecast()
     st.session_state["dashboard_loaded"] = True
 loading_screen.empty()
 
@@ -539,10 +689,14 @@ if "prediction" in st.session_state and not st.session_state.get("prediction_err
 st.markdown(render_spectrum(current_value_for_spectrum), unsafe_allow_html=True)
 
 now_str = datetime.now().strftime("%a %d %b · %H:%M")
-st.markdown(f'''<div class="aqi-topbar"><div class="aqi-topbar-left"><span class="aqi-live-dot"></span>LAHORE, PK · 31.5497°N, 74.3436°E</div><div class="aqi-topbar-left">{now_str}</div></div>''', unsafe_allow_html=True)
+st.markdown(f'''
+<div class="aqi-app-header">
+    <div class="aqi-brand">AQI <span>Forecaster</span><span class="aqi-brand-sub">Lahore air-quality intelligence</span></div>
+    <div class="aqi-location"><span class="aqi-location-pin" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 2a7 7 0 0 0-7 7c0 5.25 7 13 7 13s7-7.75 7-13a7 7 0 0 0-7-7Zm0 10.1A3.1 3.1 0 1 1 12 5.9a3.1 3.1 0 0 1 0 6.2Z"/></svg></span> Lahore, Pakistan &nbsp;·&nbsp; {now_str}</div>
+</div>
+''', unsafe_allow_html=True)
 
-# Keep every completed result on the main scrollable dashboard rather than
-# hiding EDA and SHAP behind tabs.
+# Render sections in one scrollable page: forecast first, then EDA and SHAP.
 tab_forecast = st.container()
 tab_eda = st.container()
 tab_shap = st.container()
@@ -557,16 +711,32 @@ with tab_forecast:
     elif "prediction" not in st.session_state:
         st.info("The forecast service is unavailable. EDA and explainability may still be shown below.")
     else:
-        if st.button("↻ Refresh forecast", key="refresh_forecast"):
-            with st.spinner("Refreshing AQI forecast..."):
-                load_forecast()
-            st.rerun()
         pred, pred_time = st.session_state["prediction"], st.session_state["prediction_time"]
         value = pred["h24"]
         label, color, advice, sev_idx = aqi_band(value)
         haze_opacity = 0.06 + sev_idx * 0.045
         haze_speed = 70 - sev_idx * 10
-        st.markdown(f'''<div class="aqi-hero" style="background:linear-gradient(135deg,{color}55,{BG} 75%);--haze-opacity:{haze_opacity};--haze-speed:{haze_speed}s;"><div class="aqi-hero-city">Lahore · Next 24h Outlook</div><div class="aqi-hero-number" style="text-shadow:0 0 46px {color}aa;">{value:.0f}</div><div class="aqi-hero-label">{label}</div><div class="aqi-hero-sub">Forecast generated {pred_time.strftime('%H:%M:%S')} · model: aqi_forecast_multi</div><div class="aqi-hero-advice">{advice}</div></div>''', unsafe_allow_html=True)
+        ring_pct = max(0, min(value, AQI_SCALE_MAX)) / AQI_SCALE_MAX * 100
+        ring_glow = hex_to_rgba(color, 0.55)
+        st.markdown(f'''<div class="aqi-hero" style="background:linear-gradient(135deg,{color}45,{BG} 72%);--haze-opacity:{haze_opacity};--haze-speed:{haze_speed}s;">
+            <div class="aqi-hero-flex">
+                <div class="aqi-ring" style="--ring-color:{color};--ring-pct:{ring_pct:.1f};--ring-glow:{ring_glow};">
+                    <div class="aqi-ring-track"></div>
+                    <div class="aqi-ring-hole"></div>
+                    <div class="aqi-ring-center">
+                        <div class="aqi-ring-number">{value:.0f}</div>
+                        <div class="aqi-ring-scale">AQI · 0&ndash;500</div>
+                    </div>
+                </div>
+                <div class="aqi-hero-text">
+                    <div class="aqi-hero-city">Lahore · Next 24h Outlook</div>
+                    <div class="aqi-hero-label" style="color:{color};">{label}</div>
+                    <div class="aqi-hero-sub">Forecast generated {pred_time.strftime('%H:%M:%S')} · model: aqi_forecast_multi</div>
+                    <div class="aqi-hero-advice">{advice}</div>
+                </div>
+                {f'<img class="aqi-guardian" src="{STICKER_URI}" alt="AQI air-quality guardian sticker">' if STICKER_URI else ''}
+            </div>
+        </div>''', unsafe_allow_html=True)
 
         horizons = [
             ("24 HOURS", pred["h24"], None),
@@ -575,7 +745,10 @@ with tab_forecast:
         ]
         peak_title, peak_forecast, _ = max(horizons, key=lambda item: item[1])
         peak_label, _, peak_advice, peak_severity = aqi_band(peak_forecast)
-        alert_message = f"{peak_label} AQI alert — peak forecast is {peak_forecast:.0f} for {peak_title}. {peak_advice}"
+        alert_message = (
+            f"{peak_label} AQI alert — peak forecast is {peak_forecast:.0f} for "
+            f"{peak_title}. {peak_advice}"
+        )
         if peak_severity == 0:
             st.success(f"✅ {alert_message}")
         elif peak_severity == 1:
@@ -609,6 +782,13 @@ with tab_forecast:
                 delta_line = delta_badge(forecast, prev) if prev is not None else f'<span style="color:{INK_MUTED};">Nearest forecast</span>'
                 st.markdown(f'<div class="aqi-card-cat" style="color:{band_color};">{band}</div><div class="aqi-card-delta">{delta_line}</div></div>', unsafe_allow_html=True)
 
+        refresh_col, _ = st.columns([1, 4])
+        with refresh_col:
+            if st.button("↻ Refresh forecast", key="refresh_forecast"):
+                with st.spinner("Refreshing AQI forecast..."):
+                    load_forecast()
+                st.rerun()
+
         values = [pred["h24"], pred["h48"], pred["h72"]]
         trend = go.Figure()
         for lo, hi, band_label, band_color, _ in AQI_BANDS:
@@ -631,11 +811,49 @@ with tab_forecast:
         worst_label, worst_color, worst_advice, _ = aqi_band(worst_value)
         st.markdown(f'''<div class="aqi-advisory" style="--advisory-color:{worst_color};"><div class="aqi-advisory-title" style="color:{worst_color};">Peak forecast: {worst_label} ({worst_value:.0f})</div><div class="aqi-advisory-text">{worst_advice}</div></div>''', unsafe_allow_html=True)
 
+        if "hist_df" in st.session_state and not st.session_state["hist_df"].empty:
+            latest_features = st.session_state["hist_df"].copy()
+            latest_features["time"] = pd.to_datetime(latest_features["time"], errors="coerce")
+            latest_row = latest_features.sort_values("time").iloc[-1]
+            pollutant_cards = [
+                ("pm2_5", "Particulate 2.5", "µg/m³", "#35D97A"),
+                ("pm10", "Particulate 10", "µg/m³", "#F4C430"),
+                ("ozone", "Ozone (O₃)", "µg/m³", "#60C7FF"),
+            ]
+            available_cards = [card for card in pollutant_cards if card[0] in latest_row.index and pd.notna(latest_row[card[0]])]
+            if available_cards:
+                # Add a small vertical spacer for improved readability on narrow screens
+                st.markdown('<div style="height:1.0rem"></div>', unsafe_allow_html=True)
+                st.markdown('<p class="aqi-section-label">Latest pollutant snapshot</p>', unsafe_allow_html=True)
+                for col, (column, title, unit, accent) in zip(st.columns(len(available_cards)), available_cards):
+                    with col:
+                        reading = float(latest_row[column])
+                        st.markdown(f'''<div class="aqi-card" style="--band-color:{accent};"><div class="aqi-card-eyebrow">{title}</div><div style="font-family:'Space Grotesk',sans-serif;font-size:2rem;font-weight:700;color:{INK};">{reading:.1f}<span style="font-family:'IBM Plex Mono',monospace;font-size:.72rem;color:{INK_MUTED};"> {unit}</span></div><div style="height:4px;background:{HAIRLINE};border-radius:99px;margin-top:1rem;overflow:hidden;"><div style="height:100%;width:{min(reading / 150 * 100, 100):.0f}%;background:{accent};border-radius:99px;"></div></div><div class="aqi-card-delta">latest measured feature</div></div>''', unsafe_allow_html=True)
+
+st.markdown('<div class="aqi-section-spacer"></div>', unsafe_allow_html=True)
+
 with tab_eda:
+    # Extra spacing to keep the section label visually separated on small screens
+    st.markdown('<div style="height:1.0rem"></div>', unsafe_allow_html=True)
     st.markdown('<p class="aqi-section-label">Historical feature analysis</p>', unsafe_allow_html=True)
     st.caption("Latest 30 days of engineered training features.")
     if "hist_df" not in st.session_state:
-        st.warning(f"Historical data could not be loaded: {st.session_state.get('history_error', 'unknown error')}")
+        # Show a loading info while the background loader runs; show a retry button only
+        # when an actual error has been recorded in session state.
+        if "history_error" in st.session_state:
+            st.warning(f"Historical data could not be loaded: {st.session_state.get('history_error')}")
+            if st.button("↻ Retry historical data", key="retry_history"):
+                with st.spinner("Retrying historical data..."):
+                    try:
+                        response = requests.get(f"{api_base_url.rstrip('/')}/history", params={"days": 30}, timeout=30)
+                        response.raise_for_status()
+                        st.session_state["hist_df"] = pd.DataFrame(response.json())
+                        st.session_state.pop("history_error", None)
+                    except Exception as exc:
+                        st.session_state["history_error"] = str(exc)
+                st.experimental_rerun()
+        else:
+            st.info("Historical data is loading...")
     else:
         hist_df = st.session_state["hist_df"].copy()
         hist_df["time"] = pd.to_datetime(hist_df["time"], errors="coerce")
@@ -707,6 +925,8 @@ with tab_eda:
             )
             st.plotly_chart(scatter, use_container_width=True)
 
+st.markdown('<div class="aqi-section-spacer"></div>', unsafe_allow_html=True)
+
 with tab_shap:
     st.markdown('<p class="aqi-section-label">Why the latest forecast changed</p>', unsafe_allow_html=True)
     st.caption("SHAP compares the latest online feature vector with a sample of historical training data.")
@@ -729,13 +949,23 @@ with tab_shap:
         st.plotly_chart(chart, use_container_width=True)
         st.caption(f"Prediction: {detail['prediction']:.1f} AQI · Baseline: {detail['base_value']:.1f}. Red raises the predicted AQI; green lowers it.")
     else:
-        st.warning(f"Explanation unavailable: {st.session_state.get('explain_error', 'unknown error')}")
+        if "explain_error" in st.session_state:
+            st.warning(f"Explanation unavailable: {st.session_state.get('explain_error')}")
+            if st.button("↻ Retry explanation", key="retry_explain"):
+                with st.spinner("Retrying explanation..."):
+                    try:
+                        response = requests.post(f"{api_base_url.rstrip('/')}/explain", timeout=120)
+                        response.raise_for_status()
+                        st.session_state["explain"] = response.json()
+                        st.session_state.pop("explain_error", None)
+                    except Exception as exc:
+                        st.session_state["explain_error"] = str(exc)
+                st.experimental_rerun()
+        else:
+            st.info("Model explanation is loading...")
 
-# The first request ends as soon as the AQI forecast is available.  This second
-# stage runs after that forecast has rendered, then refreshes once with EDA and
-# SHAP results ready.
+
 if "analysis_loaded" not in st.session_state:
-    with st.spinner("Preparing EDA and model explanation in the background..."):
-        load_analysis()
+    load_analysis()
     st.session_state["analysis_loaded"] = True
     st.rerun()
