@@ -1,6 +1,6 @@
 # AQI Predictor for Lahore — Project Report
 
-**Prepared for:** Karan, Data Science Intern
+**Developer:** Karan, Data Science Intern at 10 Pearls
 **Project:** AQI Predictor for Lahore
 **Report scope:** End-to-end implementation, as represented by the repository at the time of this report.
 
