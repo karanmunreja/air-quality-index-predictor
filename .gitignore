@@ -1,4 +1,10 @@
 .venv/
 .env
 __pycache__/
+*.py[cod]
+.pytest_cache/
+.coverage
+.DS_Store
 data/weather_data.csv
+saved_models/
+*.log

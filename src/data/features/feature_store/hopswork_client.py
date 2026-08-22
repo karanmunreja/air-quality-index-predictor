@@ -4,6 +4,14 @@ import hopsworks
 from dotenv import load_dotenv
 from requests.exceptions import ConnectionError as ReqConnectionError
 from urllib3.exceptions import ProtocolError
+from src.config import (
+    HOPSWORKS_HOST,
+    HOPSWORKS_PROJECT,
+    LATEST_FEATURE_GROUP,
+    LATEST_FEATURE_GROUP_VERSION,
+    TRAINING_FEATURE_GROUP,
+    TRAINING_FEATURE_GROUP_VERSION,
+)
 
 load_dotenv()
 API_KEY = os.getenv('HOPSWORKS_API_KEY')
@@ -14,8 +22,8 @@ def connect():
         raise RuntimeError("HOPSWORKS_API_KEY is not set.")
 
     project = hopsworks.login(
-        host="eu-west.cloud.hopsworks.ai",       # DNS of your Hopsworks instance
-        project="jshsmekedaxakb",
+        host=HOPSWORKS_HOST,
+        project=HOPSWORKS_PROJECT,
         engine="python",              # Name of your Hopsworks project
         api_key_value=API_KEY  # Hopsworks API key value
     )
@@ -31,8 +39,8 @@ def get_feature_store():
 def get_feature_group():
     fs = get_feature_store()
     featureGroup = fs.get_or_create_feature_group(
-        name="aqi_training_features",
-        version=2,
+        name=TRAINING_FEATURE_GROUP,
+        version=TRAINING_FEATURE_GROUP_VERSION,
         primary_key=["city", "time"],
         description="Historical weather and air quality features for AQI prediction",
         online_enabled=True,
@@ -61,8 +69,8 @@ def get_latest_feature_group():
     fs = get_feature_store()
 
     feature_group = fs.get_or_create_feature_group(
-        name="latest_aqi_features",
-        version=2,                      # ✅ match get_latest_feature_view()
+        name=LATEST_FEATURE_GROUP,
+        version=LATEST_FEATURE_GROUP_VERSION,
         primary_key=["city"],
         description="Latest processed AQI features for online prediction",
         online_enabled=True,
@@ -78,15 +86,15 @@ def get_latest_feature_view():
     fs = get_feature_store()
 
     latest_fg = fs.get_feature_group(
-        name="latest_aqi_features",
-        version=2                       # point at the new FG version
+        name=LATEST_FEATURE_GROUP,
+        version=LATEST_FEATURE_GROUP_VERSION,
     )
 
     query = latest_fg.select_all()
 
     fv = fs.get_or_create_feature_view(
         name="aqi_latest_fv",
-        version=2,                      # new FV version too
+        version=LATEST_FEATURE_GROUP_VERSION,
         query=query,
         description="Latest AQI features for online prediction"
     )

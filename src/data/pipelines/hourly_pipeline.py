@@ -12,9 +12,9 @@ from src.data.features.feature_store.hopswork_client import (
     insert_features,
     insert_latest_features
 )
+from src.config import CITY
 
 
-CITY = "Lahore"
 HISTORY_HOURS = 76
 
 

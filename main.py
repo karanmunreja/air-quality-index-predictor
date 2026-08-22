@@ -1,9 +1,8 @@
-from src.data.air_quality_client import get_current_aqi
-from src.data.features.feature_store.hopswork_client import get_feature_group
-from src.data.pipelines.feature_pipeline import run_feature_pipeline
-from src.data.pipelines.training_pipeline import run_training_pipeline
+"""Small local diagnostic for the latest online feature view.
 
-import time
+Run scheduled ingestion and training through `src.data.pipelines.hourly_pipeline`
+and `src.data.pipelines.daily_training_pipeline` instead.
+"""
 
 # start = time.time()
 # fg = get_feature_group()

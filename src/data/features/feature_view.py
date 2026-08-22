@@ -1,8 +1,9 @@
 from src.data.features.feature_store.hopswork_client import connect
+from src.config import TRAINING_FEATURE_GROUP, TRAINING_FEATURE_GROUP_VERSION
 
 
-FEATURE_GROUP_NAME = "aqi_training_features"
-FEATURE_GROUP_VERSION = 2
+FEATURE_GROUP_NAME = TRAINING_FEATURE_GROUP
+FEATURE_GROUP_VERSION = TRAINING_FEATURE_GROUP_VERSION
 
 FEATURE_VIEW_NAME = "aqi_prediction_fv"
 FEATURE_VIEW_VERSION = 1

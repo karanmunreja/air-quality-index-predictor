@@ -8,24 +8,17 @@ on:
 jobs:
   training-pipeline:
     runs-on: ubuntu-latest
-
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt
-
-      - name: Run daily training pipeline
+          python -m pip install --index-url https://pypi.org/simple -r requirements.txt
+      - name: Train, register, and deploy the best model
         env:
-           HOPSWORKS_API_KEY: ${{ secrets.HOPSWORKS_API_KEY }}
-           PYTHONPATH: ${{ github.workspace }}
-        run: |
-          python -m src.data.pipelines.daily_training_pipeline
+          HOPSWORKS_API_KEY: ${{ secrets.HOPSWORKS_API_KEY }}
+          PYTHONPATH: ${{ github.workspace }}
+        run: python -m src.data.pipelines.daily_training_pipeline

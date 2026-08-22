@@ -1,13 +1,11 @@
-from models.model_registery import register_model
+from models.model_registry import register_model
 from deploy_model import deploy_model
 from models.preprocessing import create_target, load_training_data, prepare_data, split_data
 from models.lstm import preprocess_lstm_feat
 from models.training_pipeline import train_and_get_best_model
 import os
 import joblib
-
-MODEL_NAME = "aqi_forecast_multi"
-
+from src.config import MODEL_NAME
 
 def run_daily_training_pipeline():
     df = load_training_data()

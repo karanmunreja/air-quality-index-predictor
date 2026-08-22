@@ -1,7 +1,6 @@
 from src.data.features.feature_store.hopswork_client import connect
+from src.config import DEPLOYMENT_NAME, MODEL_NAME
 
-MODEL_NAME = "aqi_forecast_multi"
-DEPLOYMENT_NAME = "aqiforecastmulti"
 
 
 def deploy_model():
