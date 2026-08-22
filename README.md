@@ -1,6 +1,6 @@
 # AQI Predictor for Lahore
 
-An end-to-end, multi-horizon AQI forecasting project built by **Karan, Data Science Intern**. The system predicts Lahore’s US AQI 24, 48, and 72 hours ahead using environmental and pollutant data, Hopsworks, FastAPI, and Streamlit.
+An end-to-end, multi-horizon AQI forecasting project built by **Karan, Data Science Intern at 10 Pearls**. The system predicts Lahore’s US AQI 24, 48, and 72 hours ahead using environmental and pollutant data, Hopsworks, FastAPI, and Streamlit.
 
 ## What it does
 
