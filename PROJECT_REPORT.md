@@ -4,6 +4,13 @@
 **Project:** AQI Predictor for Lahore
 **Report scope:** End-to-end implementation, as represented by the repository at the time of this report.
 
+## 🔗 Live Demo
+
+**Dashboard:** https://air-quality-index-predictor-2pm6dxb7hdr7roz5jafdvp.streamlit.app/
+**API (Swagger docs):** https://air-quality-index-predictor-three.vercel.app/
+
+*Replace both links above with the current live URLs before publishing.*
+
 ## 1. Executive summary
 
 This project is an end-to-end air-quality forecasting system for **Lahore, Pakistan**. It ingests weather and air-pollution data from Open-Meteo, creates hourly predictive features, stores them in Hopsworks, trains and compares multi-output machine-learning models, registers and deploys the preferred model, and presents forecast, exploratory data analysis (EDA), and explainability in a Streamlit dashboard.
@@ -16,7 +23,9 @@ The delivered application has three main user-facing capabilities:
 2. EDA using the historical Hopsworks feature group: data-quality summary, AQI trend, pollutant overlays, correlation matrix, and feature-versus-AQI exploration.
 3. SHAP-based local model explanations for each forecast horizon, using the same latest online feature row used for live prediction.
 
-## 2. Experimentation 
+The system is deployed as **two independently hosted services** — a Streamlit Cloud dashboard and a Vercel-hosted FastAPI backend — communicating over HTTPS. Section 4.1 and Section 12 describe this in detail.
+
+## 2. Experimentation
 
 The repository now contains an explicit, linear experiment script in `main.py` that
 is written to reflect the step-by-step learning process used during the
@@ -75,6 +84,29 @@ Two Hopsworks data paths are intentionally used:
 - **Latest serving feature view:** contains the most recent Lahore feature row and is used by `/predict` and `/explain`.
 
 This separation prevents the dashboard from using a one-row serving table as its historical analysis dataset.
+
+### 4.1 Deployment topology
+
+The dashboard and API are deployed as two independently hosted services rather than a single combined process:
+
+```text
+┌─────────────────────────┐        HTTPS         ┌──────────────────────────┐
+│   Streamlit Cloud        │  ─────────────────>  │   Vercel                 │
+│   streamlit_app.py       │   AQI_API_BASE_URL    │   app.py (FastAPI)       │
+│   (frontend/dashboard)   │  <─────────────────  │   (backend API)          │
+└─────────────────────────┘        JSON            └──────────────┬───────────┘
+                                                                    │
+                                                                    ▼
+                                                          Hopsworks Feature
+                                                          Store / Model Serving
+```
+
+Key implementation points:
+
+- The Streamlit app reads the backend's base URL from the `AQI_API_BASE_URL` environment variable (`os.getenv("AQI_API_BASE_URL", "http://localhost:8000")` in `streamlit_app.py`), defaulting to `localhost:8000` for local development only. In production this is set as a Streamlit Cloud secret pointing at the Vercel deployment.
+- The FastAPI backend enables `CORSMiddleware` (`allow_origins=["*"]`) so that requests from the Streamlit Cloud origin are accepted.
+- Vercel's Python runtime is serverless: functions cold-start rather than running as a single persistent process. This means the in-memory `@lru_cache` on `load_explanation_model()` and `latest_feature_view()` in `app.py` does not persist as reliably across invocations as it would on a long-running server, which can make `/explain` noticeably slower on a cold start than on a traditional host.
+- Because Vercel enforces a function bundle size limit, the backend uses a slimmer dependency list for deployment (excluding training-only packages such as `tensorflow`, `xgboost`, and `scikit-learn`, which are not imported by `app.py`). Vercel's Large Functions beta (`VERCEL_SUPPORT_LARGE_FUNCTIONS=1`, requiring Fluid Compute) is enabled to accommodate the remaining size of the `hopsworks` dependency tree.
 
 ## 5. Data acquisition and preparation
 
@@ -156,7 +188,7 @@ The daily training pipeline performs the full orchestration: load feature-group 
 
 ## 9. API layer
 
-`app.py` is the FastAPI boundary between the dashboard, the feature store, and Hopsworks Model Serving.
+`app.py` is the FastAPI boundary between the dashboard, the feature store, and Hopsworks Model Serving. It is deployed independently on **Vercel** (see Section 4.1) and is called by the Streamlit dashboard over HTTPS rather than being co-located in the same process.
 
 | Endpoint | Purpose |
 |---|---|
@@ -166,7 +198,9 @@ The daily training pipeline performs the full orchestration: load feature-group 
 | `GET /history?days=30` | Returns recent Lahore rows from the historical feature group for EDA. |
 | `POST /explain` | Produces local SHAP explanations for 24h, 48h, and 72h forecasts. |
 
-For explainability, the API downloads the best registered artifact, confirms its feature schema, obtains a 100-row historical background sample, selects TreeExplainer for tree models and LinearExplainer for Ridge, and normalizes multi-output SHAP values into one feature contribution vector per horizon. Model and background data are cached in memory to reduce repeat latency.
+For explainability, the API downloads the best registered artifact, confirms its feature schema, obtains a 100-row historical background sample, selects TreeExplainer for tree models and LinearExplainer for Ridge, and normalizes multi-output SHAP values into one feature contribution vector per horizon. Model and background data are cached in memory to reduce repeat latency — though see Section 4.1 for a caveat on how well this caching holds up across Vercel's serverless cold starts.
+
+Interactive Swagger documentation for all endpoints is available at `/docs` on the deployed API (see Live Demo section above).
 
 ## 10. Streamlit dashboard
 
@@ -203,13 +237,16 @@ Shown below EDA after explanation calculation completes:
 
 | File | Responsibility |
 |---|---|
-| `README.md` | Minimal project introduction. It should be expanded with setup and architecture instructions. |
+| `README.md` | Project introduction, local setup, and deployment instructions. |
 | `main.py` | Development scratchpad for testing feature-store and feature-view operations. |
-| `requirements.txt` | Pinned backend, data-pipeline, model-training, and SHAP packages. |
+| `requirements.txt` | Pinned backend, data-pipeline, model-training, and SHAP packages, used for training and by the Streamlit deployment. |
+| `requirements-api.txt` | Slimmer dependency list scoped to the FastAPI backend's Vercel deployment; excludes training-only packages (`tensorflow`, `xgboost`, `scikit-learn`) to stay within Vercel's function bundle size limit. |
 | `requirements-streamlit.txt` | Lightweight Streamlit/Plotly/Pillow dashboard environment. |
+| `runtime.txt` | Pins the Python version used by Streamlit Cloud, to avoid drift to a newer default runtime that may be incompatible with pinned packages such as `tensorflow`. |
+| `vercel.json` | Vercel build/routing configuration for the FastAPI backend, including the Fluid Compute flag used to support the deployment's dependency size. |
 | `icon.png` | Browser/page icon used by Streamlit. |
-| `app.py` | FastAPI service for live prediction, history retrieval, and SHAP explanation. |
-| `streamlit_app.py` | Main dashboard: forecast visualisation, alerts, EDA, and SHAP presentation. |
+| `app.py` | FastAPI service for live prediction, history retrieval, and SHAP explanation. Deployed on Vercel; see Section 4.1. |
+| `streamlit_app.py` | Main dashboard: forecast visualisation, alerts, EDA, and SHAP presentation. Deployed on Streamlit Cloud; calls the FastAPI backend via `AQI_API_BASE_URL`. |
 | `deploy_model.py` | Selects the highest-Average-R² registry model and deploys/replaces Hopsworks serving. |
 | `predictor.py` | Hopsworks serving predictor that loads the serialized model and returns three forecasts. |
 | `model_comparison_results.csv` | Experiment log used for the model-comparison section of this report. |
@@ -233,10 +270,10 @@ Shown below EDA after explanation calculation completes:
 
 ## 12. How to operate the system
 
-### Prerequisites
+### 12.1 Prerequisites
 
 - Python virtual environment;
-- Hopsworks project access and `HOPSWORKS_API_KEY` in `.env`;
+- Hopsworks project access and `HOPSWORKS_API_KEY`;
 - access to the Hopsworks model-serving endpoint;
 - installed dependencies. If a custom pip index cannot find SHAP, install it explicitly from PyPI:
 
@@ -244,7 +281,11 @@ Shown below EDA after explanation calculation completes:
 python3 -m pip install --index-url https://pypi.org/simple shap
 ```
 
-### Local application startup
+### 12.2 Local development
+
+For local development, both services run as separate processes on the same machine, and the Streamlit app talks to the FastAPI backend over `localhost`.
+
+Set `HOPSWORKS_API_KEY` in a local `.env` file (never committed to version control).
 
 Start FastAPI in one terminal:
 
@@ -260,6 +301,25 @@ streamlit run streamlit_app.py
 
 If Streamlit reports that it cannot connect to `localhost:8000`, FastAPI is not running, has stopped with an error, or is using another port.
 
+### 12.3 Production deployment
+
+In production, the two services run independently, on different platforms, and are connected by environment variables rather than `localhost`:
+
+| Variable | Set where | Purpose |
+|---|---|---|
+| `AQI_API_BASE_URL` | Streamlit Cloud → App Settings → Secrets | Full base URL of the deployed FastAPI backend (e.g. `https://your-project.vercel.app`), so the dashboard stops defaulting to `localhost:8000`. |
+| `HOPSWORKS_API_KEY` | Vercel → Project Settings → Environment Variables (marked Sensitive) | Authenticates the FastAPI backend against the Hopsworks feature store and model registry. |
+| `VERCEL_SUPPORT_LARGE_FUNCTIONS` | Vercel → Project Settings → Environment Variables | Set to `1` to opt into Vercel's Large Functions beta, required because the backend's dependency bundle (chiefly the `hopsworks` package) exceeds the standard 500 MB function size limit. Requires Fluid Compute to be enabled on the project. |
+
+Deployment steps, at a high level:
+
+1. Deploy the FastAPI backend to Vercel from this repository, with `requirements-api.txt` as the install target and `vercel.json` providing build/routing configuration.
+2. Set `HOPSWORKS_API_KEY` and `VERCEL_SUPPORT_LARGE_FUNCTIONS` in the Vercel project's environment variables, and confirm Fluid Compute is enabled under Project Settings → Functions.
+3. Once the backend is live, verify it independently at `/health` and `/docs` before connecting the dashboard.
+4. Deploy `streamlit_app.py` to Streamlit Cloud from the same repository, with `runtime.txt` pinning the Python version and `requirements-streamlit.txt` (or `requirements.txt`, depending on final repo layout) as the dependency source.
+5. Set `AQI_API_BASE_URL` as a Streamlit Cloud secret, pointing at the live Vercel URL from step 1.
+6. Confirm CORS is enabled in `app.py` (`CORSMiddleware`) so that requests from the Streamlit Cloud origin succeed rather than being blocked by the browser.
+
 ## 13. Current limitations and recommendations
 
 1. **Feature-pipeline dates are hard-coded.** `feature_pipeline.py` currently uses a fixed August 2026 range. Convert dates to function parameters or scheduled rolling windows.
@@ -268,11 +328,11 @@ If Streamlit reports that it cannot connect to `localhost:8000`, FastAPI is not 
 4. **Persist preprocessing artefacts.** The LSTM scaler is not saved alongside the model. Persist and version the scaler and feature schema for reproducible inference.
 5. **LSTM serving/explanation needs a sequence path.** The deployed predictor and SHAP endpoint are designed for tabular sklearn artifacts. If LSTM is selected for deployment, save/load it with Keras and construct a 24-step input sequence plus a sequence-aware explainer.
 6. **Results log hygiene.** The CSV appends experiments indefinitely and includes one incomplete LSTM average. Add run ID, training date, data range, model hyperparameters, and validation status; do not select incomplete results.
-7. **Secrets and endpoints.** Keep API keys exclusively in environment variables and move the model-serving URL into configuration rather than source code.
-8. **Monitoring.** Add prediction latency, feature freshness, API error, missing-data, and post-deployment forecast-error monitoring.
-9. **Documentation.** Keep the README current as the deployed endpoint, model, and workflow mature.
+7. **Secrets and endpoints.** API keys are kept in environment variables on each hosting platform (Vercel, Streamlit Cloud) rather than in source control; continue to avoid committing real `.env` files, and rotate `HOPSWORKS_API_KEY` if it is ever accidentally exposed.
+8. **Cold-start latency on the backend.** Because the FastAPI backend runs as a serverless function on Vercel, `/explain` in particular may re-load the model artifact on a cold invocation rather than reusing an in-memory cache, which can make the first SHAP request after idle time noticeably slower than subsequent ones. Monitor whether this is acceptable for the intended audience, or consider a persistent-host alternative if not.
+9. **Monitoring.** Add prediction latency, feature freshness, API error, missing-data, and post-deployment forecast-error monitoring.
+10. **Documentation.** Keep the README and this report current as the deployed endpoint, model, and workflow mature.
 
 ## 14. Conclusion
 
-Karan’s AQI Predictor for Lahore demonstrates a complete data-science lifecycle: acquisition, feature engineering, multi-horizon forecasting, model comparison, experiment logging, feature-store integration, model registry/deployment, interactive EDA, explainability, and a practical dashboard. The logged results support Ridge as the current best balanced model, while XGBoost remains the strongest next-day specialist. The main next step is operational hardening: scheduled ingestion and retraining, stronger time-series validation, clean experiment metadata, and a dedicated sequence-serving path if the LSTM is to be deployed.
-
+Karan’s AQI Predictor for Lahore demonstrates a complete data-science lifecycle: acquisition, feature engineering, multi-horizon forecasting, model comparison, experiment logging, feature-store integration, model registry/deployment, interactive EDA, explainability, and a practical dashboard, deployed as two independently hosted, production services. The logged results support Ridge as the current best balanced model, while XGBoost remains the strongest next-day specialist. The main next steps are operational hardening: scheduled ingestion and retraining, stronger time-series validation, clean experiment metadata, monitoring of the serverless backend's cold-start behaviour, and a dedicated sequence-serving path if the LSTM is to be deployed.
