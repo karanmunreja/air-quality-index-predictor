@@ -4,6 +4,7 @@ from functools import lru_cache
 from pathlib import Path
 import os
 import re
+from fastapi.middleware.cors import CORSMiddleware
 
 from fastapi import FastAPI, HTTPException, Query
 import joblib
@@ -35,7 +36,12 @@ load_dotenv()
 HOPSWORKS_API_KEY = os.getenv("HOPSWORKS_API_KEY")
 
 app = FastAPI(title="AQI Forecast API", version="1.1.0")
-
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 @lru_cache(maxsize=1)
 def latest_feature_view():
