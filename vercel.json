@@ -1,15 +1,7 @@
 {
-  "builds": [
-    {
-      "src": "app.py",
-      "use": "@vercel/python"
-    }
-  ],
-  "routes": [
-    { "src": "/(.*)", "dest": "app.py" }
-  ],
-  "fluid": true,
   "functions": {
-    "app.py": { "maxDuration": 300 }
+    "app.py": {
+      "maxDuration": 300
+    }
   }
 }
