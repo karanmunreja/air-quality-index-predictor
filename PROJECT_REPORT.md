@@ -6,10 +6,8 @@
 
 ## 🔗 Live Demo
 
-**Dashboard:** https://air-quality-index-predictor-2pm6dxb7hdr7roz5jafdvp.streamlit.app/
-**API (Swagger docs):** https://air-quality-index-predictor-three.vercel.app/
-
-*Replace both links above with the current live URLs before publishing.*
+**Dashboard:** [air-quality-index-predictor-2pm6dxb7hdr7roz5jafdvp.streamlit.app](https://air-quality-index-predictor-2pm6dxb7hdr7roz5jafdvp.streamlit.app/)
+**API (Swagger docs):** [air-quality-index-predictor-lahore.vercel.app/docs](https://air-quality-index-predictor-lahore.vercel.app/docs)
 
 ## 1. Executive summary
 
@@ -23,7 +21,7 @@ The delivered application has three main user-facing capabilities:
 2. EDA using the historical Hopsworks feature group: data-quality summary, AQI trend, pollutant overlays, correlation matrix, and feature-versus-AQI exploration.
 3. SHAP-based local model explanations for each forecast horizon, using the same latest online feature row used for live prediction.
 
-The system is deployed as **two independently hosted services** — a Streamlit Cloud dashboard and a Vercel-hosted FastAPI backend — communicating over HTTPS. Section 4.1 and Section 12 describe this in detail.
+The system is deployed as **two independently hosted services** — a Streamlit Cloud dashboard and a Vercel-hosted FastAPI backend — communicating over HTTPS. Section 4.1 describes this in detail, including a local-model fallback added after a real Hopsworks Model Serving outage during development.
 
 ## 2. Experimentation
 
@@ -96,9 +94,10 @@ The dashboard and API are deployed as two independently hosted services rather t
 │   (frontend/dashboard)   │  <─────────────────  │   (backend API)          │
 └─────────────────────────┘        JSON            └──────────────┬───────────┘
                                                                     │
-                                                                    ▼
-                                                          Hopsworks Feature
-                                                          Store / Model Serving
+                                                          ┌─────────┴──────────┐
+                                                          ▼                    ▼
+                                                Hopsworks Feature      Local fallback model
+                                                Store / Model Serving  (saved_models/*.pkl)
 ```
 
 Key implementation points:
@@ -106,7 +105,10 @@ Key implementation points:
 - The Streamlit app reads the backend's base URL from the `AQI_API_BASE_URL` environment variable (`os.getenv("AQI_API_BASE_URL", "http://localhost:8000")` in `streamlit_app.py`), defaulting to `localhost:8000` for local development only. In production this is set as a Streamlit Cloud secret pointing at the Vercel deployment.
 - The FastAPI backend enables `CORSMiddleware` (`allow_origins=["*"]`) so that requests from the Streamlit Cloud origin are accepted.
 - Vercel's Python runtime is serverless: functions cold-start rather than running as a single persistent process. This means the in-memory `@lru_cache` on `load_explanation_model()` and `latest_feature_view()` in `app.py` does not persist as reliably across invocations as it would on a long-running server, which can make `/explain` noticeably slower on a cold start than on a traditional host.
-- Because Vercel enforces a function bundle size limit, the backend uses a slimmer dependency list for deployment (excluding training-only packages such as `tensorflow`, `xgboost`, and `scikit-learn`, which are not imported by `app.py`). Vercel's Large Functions beta (`VERCEL_SUPPORT_LARGE_FUNCTIONS=1`, requiring Fluid Compute) is enabled to accommodate the remaining size of the `hopsworks` dependency tree.
+- Because Vercel enforces a function bundle size limit, the backend uses a slimmer dependency list for deployment (`requirements-api.txt`, excluding training-only packages such as `tensorflow`, `xgboost`, and `scikit-learn`, which are not imported by `app.py`). Vercel's Large Functions beta (`VERCEL_SUPPORT_LARGE_FUNCTIONS=1`, requiring Fluid Compute) is enabled to accommodate the remaining size of the `hopsworks` dependency tree.
+- `vercel.json` configures a `maxDuration` of 300 seconds for the `app.py` function, since Hopsworks' online Feature Query Service can occasionally take over a minute to resolve a query, especially on a cold request.
+
+**Resilience to Hopsworks outages.** During development, the Hopsworks Model Serving deployment was temporarily frozen after the project's free-tier compute credit quota was exhausted (Hopsworks enforces a monthly spending cap on free accounts and rejects new compute allocation once it is reached). This surfaced as a `404` from the serving endpoint even though the rest of the system — feature retrieval, the dashboard, EDA — remained unaffected. To make `/predict` resilient to this class of failure, `app.py` now falls back to a locally bundled model artifact (`saved_models/aqi_forecast_multi.pkl`, downloaded from the Hopsworks Model Registry) whenever the live serving request fails, rather than surfacing the error directly to the dashboard. The response includes a `source` field (`"hopsworks"` or `"local_fallback"`) so it is clear which path served a given prediction.
 
 ## 5. Data acquisition and preparation
 
@@ -174,7 +176,7 @@ The evaluation routine reports R², RMSE, and MAE independently for each horizon
 - **Best next-day model: XGBoost.** Its 24-hour R² is about 0.773 with the lowest 24-hour RMSE and MAE, so it is attractive when the product focuses primarily on the next-day forecast.
 - **Random Forest:** provides a reasonable nonlinear baseline but trails the other tabular candidates at every horizon in the logged results.
 - **LSTM:** improves over Random Forest at longer horizons but does not beat Ridge overall. The current deployment format is better aligned with the tabular sklearn candidates than with a sequence model.
-- **Forecast uncertainty increases with horizon.** Every model’s R² falls and error grows from 24 to 72 hours, which is expected because future atmospheric and emission conditions become harder to infer.
+- **Forecast uncertainty increases with horizon.** Every model's R² falls and error grows from 24 to 72 hours, which is expected because future atmospheric and emission conditions become harder to infer.
 
 The best individual complete logged result is **Ridge**, with `average_r2 = 0.6302634341`.
 
@@ -186,6 +188,8 @@ The deployment script asks Hopsworks for the model with the greatest `Average_R2
 
 The daily training pipeline performs the full orchestration: load feature-group data, build targets, train all models, select the best, save/register it, and deploy it.
 
+`saved_models/aqi_forecast_multi.pkl` additionally serves a second purpose beyond training-time serialization: it is committed to the repository and bundled with the API deployment as a local inference fallback (see Section 4.1 and Section 9). If the model changes after a retraining run, this file should be refreshed — see Section 12.4.
+
 ## 9. API layer
 
 `app.py` is the FastAPI boundary between the dashboard, the feature store, and Hopsworks Model Serving. It is deployed independently on **Vercel** (see Section 4.1) and is called by the Streamlit dashboard over HTTPS rather than being co-located in the same process.
@@ -194,11 +198,13 @@ The daily training pipeline performs the full orchestration: load feature-group 
 |---|---|
 | `GET /` | Basic service identity response. |
 | `GET /health` | Health probe response. |
-| `POST /predict` | Retrieves the latest online feature vector, removes non-model columns, and forwards it to Hopsworks model serving. |
+| `POST /predict` | Retrieves the latest online feature vector, removes non-model columns, and forwards it to Hopsworks model serving. Falls back to a locally bundled model artifact if Hopsworks Model Serving is unreachable. |
 | `GET /history?days=30` | Returns recent Lahore rows from the historical feature group for EDA. |
 | `POST /explain` | Produces local SHAP explanations for 24h, 48h, and 72h forecasts. |
 
 For explainability, the API downloads the best registered artifact, confirms its feature schema, obtains a 100-row historical background sample, selects TreeExplainer for tree models and LinearExplainer for Ridge, and normalizes multi-output SHAP values into one feature contribution vector per horizon. Model and background data are cached in memory to reduce repeat latency — though see Section 4.1 for a caveat on how well this caching holds up across Vercel's serverless cold starts.
+
+`/predict` follows a similar defensive pattern to the caching used in `/explain`: if the request to `HOPSWORKS_ENDPOINT` fails for any reason (network error, timeout, or the endpoint being unavailable — including a frozen deployment, as happened during development), the API loads and runs the bundled fallback artifact locally instead of returning an error, keeping the live forecast available to the dashboard. The JSON response includes a `source` field (`"hopsworks"` or `"local_fallback"`) indicating which path produced the forecast. If both the live endpoint and the local fallback fail, the API returns a `502` with details on both failures.
 
 Interactive Swagger documentation for all endpoints is available at `/docs` on the deployed API (see Live Demo section above).
 
@@ -243,12 +249,14 @@ Shown below EDA after explanation calculation completes:
 | `requirements-api.txt` | Slimmer dependency list scoped to the FastAPI backend's Vercel deployment; excludes training-only packages (`tensorflow`, `xgboost`, `scikit-learn`) to stay within Vercel's function bundle size limit. |
 | `requirements-streamlit.txt` | Lightweight Streamlit/Plotly/Pillow dashboard environment. |
 | `runtime.txt` | Pins the Python version used by Streamlit Cloud, to avoid drift to a newer default runtime that may be incompatible with pinned packages such as `tensorflow`. |
-| `vercel.json` | Vercel build/routing configuration for the FastAPI backend, including the Fluid Compute flag used to support the deployment's dependency size. |
+| `vercel.json` | Vercel function configuration for the FastAPI backend (entrypoint auto-detected via Vercel's FastAPI framework support; `maxDuration` set to 300 seconds to accommodate slow Hopsworks Feature Query Service responses). |
+| `recover_model.py` | One-off utility to re-download the current best-registered model from the Hopsworks Model Registry and restore it to `saved_models/aqi_forecast_multi.pkl`, used to (re)populate or refresh the local prediction fallback. |
 | `icon.png` | Browser/page icon used by Streamlit. |
-| `app.py` | FastAPI service for live prediction, history retrieval, and SHAP explanation. Deployed on Vercel; see Section 4.1. |
+| `app.py` | FastAPI service for live prediction, history retrieval, and SHAP explanation, with a local-model fallback for `/predict`. Deployed on Vercel; see Section 4.1. |
 | `streamlit_app.py` | Main dashboard: forecast visualisation, alerts, EDA, and SHAP presentation. Deployed on Streamlit Cloud; calls the FastAPI backend via `AQI_API_BASE_URL`. |
 | `deploy_model.py` | Selects the highest-Average-R² registry model and deploys/replaces Hopsworks serving. |
 | `predictor.py` | Hopsworks serving predictor that loads the serialized model and returns three forecasts. |
+| `saved_models/aqi_forecast_multi.pkl` | Serialized best-registered model artifact, committed to the repo and bundled with the API deployment as a local inference fallback for `/predict` when Hopsworks Model Serving is unreachable. |
 | `model_comparison_results.csv` | Experiment log used for the model-comparison section of this report. |
 | `models/preprocessing.py` | Target generation, lag/change-rate features, categorical weekday encoding, model matrix construction, chronological split, and online preparation helper. |
 | `models/train.py` | Defines Random Forest, Ridge, and XGBoost training routines. |
@@ -313,12 +321,22 @@ In production, the two services run independently, on different platforms, and a
 
 Deployment steps, at a high level:
 
-1. Deploy the FastAPI backend to Vercel from this repository, with `requirements-api.txt` as the install target and `vercel.json` providing build/routing configuration.
+1. Deploy the FastAPI backend to Vercel from this repository, with `requirements-api.txt` set as the Install Command target (`pip install -r requirements-api.txt`) and `vercel.json` configuring the function's `maxDuration`.
 2. Set `HOPSWORKS_API_KEY` and `VERCEL_SUPPORT_LARGE_FUNCTIONS` in the Vercel project's environment variables, and confirm Fluid Compute is enabled under Project Settings → Functions.
 3. Once the backend is live, verify it independently at `/health` and `/docs` before connecting the dashboard.
-4. Deploy `streamlit_app.py` to Streamlit Cloud from the same repository, with `runtime.txt` pinning the Python version and `requirements-streamlit.txt` (or `requirements.txt`, depending on final repo layout) as the dependency source.
+4. Deploy `streamlit_app.py` to Streamlit Cloud from the same repository, with `runtime.txt` pinning the Python version and `requirements.txt` as the dependency source.
 5. Set `AQI_API_BASE_URL` as a Streamlit Cloud secret, pointing at the live Vercel URL from step 1.
 6. Confirm CORS is enabled in `app.py` (`CORSMiddleware`) so that requests from the Streamlit Cloud origin succeed rather than being blocked by the browser.
+
+### 12.4 Refreshing the local fallback model
+
+If the registered model changes (e.g. after a retraining run), refresh the bundled fallback artifact so `/predict` does not silently fall back to a stale model during a Hopsworks outage:
+
+```bash
+python3 recover_model.py
+```
+
+This downloads the current best-registered model from the Hopsworks Model Registry and writes it to `saved_models/aqi_forecast_multi.pkl`. Commit and push the updated file, then redeploy the API so the new artifact is bundled with the deployment.
 
 ## 13. Current limitations and recommendations
 
@@ -330,9 +348,11 @@ Deployment steps, at a high level:
 6. **Results log hygiene.** The CSV appends experiments indefinitely and includes one incomplete LSTM average. Add run ID, training date, data range, model hyperparameters, and validation status; do not select incomplete results.
 7. **Secrets and endpoints.** API keys are kept in environment variables on each hosting platform (Vercel, Streamlit Cloud) rather than in source control; continue to avoid committing real `.env` files, and rotate `HOPSWORKS_API_KEY` if it is ever accidentally exposed.
 8. **Cold-start latency on the backend.** Because the FastAPI backend runs as a serverless function on Vercel, `/explain` in particular may re-load the model artifact on a cold invocation rather than reusing an in-memory cache, which can make the first SHAP request after idle time noticeably slower than subsequent ones. Monitor whether this is acceptable for the intended audience, or consider a persistent-host alternative if not.
-9. **Monitoring.** Add prediction latency, feature freshness, API error, missing-data, and post-deployment forecast-error monitoring.
-10. **Documentation.** Keep the README and this report current as the deployed endpoint, model, and workflow mature.
+9. **Free-tier compute quotas can silently interrupt live serving.** Hopsworks' free-tier monthly compute credit budget was exhausted during development, freezing Model Serving until the next billing cycle or an upgrade. The local fallback (Section 4.1, 9, 12.4) mitigates the user-facing impact, but the underlying quota risk remains for any Hopsworks-dependent feature (e.g. `/history`, `/explain`, and feature retrieval for `/predict` itself), which are not currently covered by a fallback.
+10. **Local fallback model can go stale.** The bundled `saved_models/aqi_forecast_multi.pkl` reflects whichever model was best-registered at the time it was last downloaded and committed. If a newer model is trained and registered in Hopsworks, the fallback artifact will not automatically update — it should be periodically re-synced (Section 12.4) so a Hopsworks outage does not silently serve an outdated model indefinitely.
+11. **Monitoring.** Add prediction latency, feature freshness, API error, missing-data, fallback-usage-rate, and post-deployment forecast-error monitoring.
+12. **Documentation.** Keep the README and this report current as the deployed endpoint, model, and workflow mature.
 
 ## 14. Conclusion
 
-Karan’s AQI Predictor for Lahore demonstrates a complete data-science lifecycle: acquisition, feature engineering, multi-horizon forecasting, model comparison, experiment logging, feature-store integration, model registry/deployment, interactive EDA, explainability, and a practical dashboard, deployed as two independently hosted, production services. The logged results support Ridge as the current best balanced model, while XGBoost remains the strongest next-day specialist. The main next steps are operational hardening: scheduled ingestion and retraining, stronger time-series validation, clean experiment metadata, monitoring of the serverless backend's cold-start behaviour, and a dedicated sequence-serving path if the LSTM is to be deployed.
+Karan's AQI Predictor for Lahore demonstrates a complete data-science lifecycle: acquisition, feature engineering, multi-horizon forecasting, model comparison, experiment logging, feature-store integration, model registry/deployment, interactive EDA, explainability, and a practical dashboard, deployed as two independently hosted, production services with a local-model fallback for live serving resilience. The logged results support Ridge as the current best balanced model, while XGBoost remains the strongest next-day specialist. The main next steps are operational hardening: scheduled ingestion and retraining, stronger time-series validation, clean experiment metadata, monitoring of the serverless backend's cold-start behaviour and fallback usage rate, extending outage resilience to the remaining Hopsworks-dependent endpoints, and a dedicated sequence-serving path if the LSTM is to be deployed.
