@@ -32,8 +32,12 @@ NON_MODEL_COLUMNS = [
 ]
 HORIZONS = ("24h", "48h", "72h")
 
+# Path to the bundled model artifact, used as a fallback when Hopsworks
+# Model Serving is unreachable (e.g. quota-frozen, network error).
+LOCAL_MODEL_PATH = Path(__file__).parent / "saved_models" / "aqi_forecast_multi.pkl"
+
 load_dotenv()
-HOPSWORKS_API_KEY = os.getenv("HOPSWORKS_API_KEY")
+HOPSWORKS_API_KEY = (os.getenv("HOPSWORKS_API_KEY") or "").strip()
 
 app = FastAPI(title="AQI Forecast API", version="1.1.0")
 app.add_middleware(
@@ -80,6 +84,26 @@ def load_explanation_model():
     if not artifacts:
         raise RuntimeError(f"No joblib model artifact found in {model_dir}")
     return joblib.load(artifacts[0]), model_meta
+
+
+@lru_cache(maxsize=1)
+def load_local_fallback_model():
+    """Loads the bundled model artifact so /predict can still work if
+    Hopsworks Model Serving is unreachable (e.g. quota-frozen, network error)."""
+    if not LOCAL_MODEL_PATH.exists():
+        raise RuntimeError(f"Local fallback model not found at {LOCAL_MODEL_PATH}")
+    return joblib.load(LOCAL_MODEL_PATH)
+
+
+def predict_locally(X: pd.DataFrame) -> dict:
+    """Run inference with the local model instead of the Hopsworks serving endpoint."""
+    model = load_local_fallback_model()
+    if hasattr(model, "feature_names_in_"):
+        X = X.loc[:, list(model.feature_names_in_)]
+    preds = np.asarray(model.predict(X)).reshape(-1)
+    if len(preds) < 3:
+        raise RuntimeError(f"Local fallback model returned {len(preds)} values, expected 3")
+    return {"predictions": [preds[:3].tolist()], "source": "local_fallback"}
 
 
 @lru_cache(maxsize=4)
@@ -154,6 +178,12 @@ def health():
 def predict():
     try:
         X = model_inputs(latest_features())
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+    try:
         response = requests.post(
             HOPSWORKS_ENDPOINT,
             headers={
@@ -164,13 +194,22 @@ def predict():
             timeout=30,
         )
         response.raise_for_status()
-        return response.json()
+        result = response.json()
+        result["source"] = "hopsworks"
+        return result
     except requests.RequestException as exc:
-        raise HTTPException(status_code=502, detail=f"Hopsworks model request failed: {exc}") from exc
-    except HTTPException:
-        raise
-    except Exception as exc:
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
+        # Hopsworks Model Serving is unreachable (e.g. quota freeze) — fall
+        # back to the bundled local model instead of failing outright.
+        try:
+            return predict_locally(X)
+        except Exception as fallback_exc:
+            raise HTTPException(
+                status_code=502,
+                detail=(
+                    f"Hopsworks model request failed: {exc}. "
+                    f"Local fallback also failed: {fallback_exc}"
+                ),
+            ) from exc
 
 
 @app.get("/model")
