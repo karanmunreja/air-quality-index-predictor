@@ -139,3 +139,50 @@
 #     # Uncomment the following line if you have Hopsworks configured and want to run it:
 #     # feature_group_actions()
 #     train_and_evaluate(df, feature_cols)
+
+"""
+One-off script to re-download the registered model artifact from Hopsworks
+and restore it to saved_models/aqi_forecast_multi.pkl for local use as the
+FastAPI backend's fallback model.
+
+Run this locally (not on Vercel):
+    python3 recover_model.py
+"""
+
+import shutil
+from pathlib import Path
+
+from src.data.features.feature_store.hopswork_client import connect
+from src.config import MODEL_NAME
+
+OUTPUT_DIR = Path("saved_models")
+OUTPUT_PATH = OUTPUT_DIR / "aqi_forecast_multi.pkl"
+
+
+def main():
+    OUTPUT_DIR.mkdir(exist_ok=True)
+
+    project = connect()
+    mr = project.get_model_registry()
+
+    # Use the same "best model" selection logic as app.py, so the fallback
+    # matches whatever is actually registered as the top performer.
+    model = mr.get_best_model(MODEL_NAME, "Average_R2", "max")
+    print(f"Found model: {model.name} v{model.version}")
+
+    model_dir = Path(model.download())
+    print(f"Downloaded to: {model_dir}")
+
+    # Find the actual .pkl / .joblib artifact inside the downloaded folder
+    artifacts = list(model_dir.rglob("*.pkl")) + list(model_dir.rglob("*.joblib"))
+    if not artifacts:
+        raise RuntimeError(f"No .pkl or .joblib file found in {model_dir}")
+
+    source_file = artifacts[0]
+    shutil.copy(source_file, OUTPUT_PATH)
+    print(f"Copied {source_file} -> {OUTPUT_PATH}")
+    print("Done. Commit this file to git (make sure it's not in .gitignore) and push.")
+
+
+if __name__ == "__main__":
+    main()
