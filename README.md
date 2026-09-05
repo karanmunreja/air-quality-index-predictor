@@ -5,7 +5,7 @@ An end-to-end, multi-horizon AQI forecasting project built by **Karan, Data Scie
 ## 🔗 Live Demo
 
 **Dashboard:** https://air-quality-index-predictor-2pm6dxb7hdr7roz5jafdvp.streamlit.app/
-**API (Swagger docs):** https://air-quality-index-predictor-three.vercel.app/
+**API (Swagger docs):** https://air-quality-index-predictor-lahore.vercel.app/docs
 
 ## What it does
 
